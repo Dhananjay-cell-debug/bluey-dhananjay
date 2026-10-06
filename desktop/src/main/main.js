@@ -111,6 +111,7 @@ function status() {
     phoneHands: (() => { const t = phones && phones.handsPhone(); return t ? { name: t.info.name, hands: !!t.info.hands, lite: !!t.info.lite } : null; })(),
     wirelessPhone: adbHands && adbHands.connected ? (adbHands.model || adbHands.serial) : null,
     usage: bluey && bluey.usage,
+    route: bluey && bluey.lastRoute,
     addresses: phones ? phones.addresses() : [],
     port: phones && phones.port,
     pairRequest: pairRequest ? { name: pairRequest.name, numbers: pairRequest.numbers } : null,
@@ -295,6 +296,7 @@ function wireIpc() {
   ipcMain.handle('panel:type', (e, text) => bluey.typed(text));
   ipcMain.handle('panel:pairAnswer', (e, allow) => { if (pairRequest) (allow ? pairRequest.allow() : pairRequest.deny()); return true; });
   ipcMain.handle('panel:health', () => health());
+  ipcMain.handle('panel:speakTest', () => bluey.speak("Hiya! I'm Bluey. This is how I sound. Want me to open something for you?")),
   ipcMain.handle('panel:adbPair', async (e, { pairAddress, code, connectAddress }) => {
     if (pairAddress && code) { const r = await adbHands.pair(pairAddress, code); if (!r.ok) return r; }
     if (connectAddress) return adbHands.connect(connectAddress);
@@ -309,7 +311,7 @@ function wireIpc() {
   });
   ipcMain.handle('panel:models', async () => {
     if (!codexModels) codexModels = await require('./brain/codex').listModels().catch(() => []);
-    return { claude: require('./brain/claude').CHOICES, codex: codexModels };
+    return { claude: require('./brain/claude').CHOICES, codex: codexModels, voices: require('./edge-tts').VOICES };
   });
   ipcMain.handle('panel:installPhone', async () => { const r = await usb.install(); pushStatus(); return r; });
   ipcMain.handle('panel:forget', (e, id) => { phones.forget(id); return settings.public(); });
@@ -561,6 +563,9 @@ Only allow it if the numbers match. A paired phone can ask Bluey to use this PC.
   ipcMain.on('dock:askEnd', () => bluey.endAsk());
   bluey.on('brain', pushStatus);
   bluey.on('usage', pushStatus);
+  bluey.on('route', (r) => { log('route:', r.tier, '->', r.brain, r.model, r.effort, '(' + r.why + ')'); pushStatus(); });
+  bluey.codexModels = codexModels || [];
+  require('./brain/codex').listModels().then((m) => { codexModels = m; bluey.codexModels = m; }).catch(() => {});
   // Speaker labels for the notes, worked out in the background as each audio chunk finishes.
   const { Diarizer, speakerAt } = require('./diarize');
   const sherpaPath = DEV ? path.join(ROOT, 'node_modules', 'sherpa-onnx-node') : path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'sherpa-onnx-node');

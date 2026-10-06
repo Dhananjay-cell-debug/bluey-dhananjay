@@ -60,6 +60,8 @@ class ClaudeBrain extends EventEmitter {
     ];
     const effort = this.o.effort || ((this.o.speed || 'balanced') === 'smart' ? '' : 'low');
     if (effort) args.push('--effort', effort);
+    this.currentModel = this.o.model || MODELS[this.o.speed] || 'sonnet';
+    this.currentEffort = effort || null;
     this.proc = spawn(tool.command, args, {
       cwd: this.o.workDir, env: subscriptionEnv(tool.node ? { ELECTRON_RUN_AS_NODE: '1' } : {}), windowsHide: true,
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -93,6 +95,13 @@ class ClaudeBrain extends EventEmitter {
   write(obj) {
     if (!this.proc) return false;
     try { this.proc.stdin.write(JSON.stringify(obj) + '\n'); return true; } catch { return false; }
+  }
+
+  /** Changes the model and effort for the next questions, without restarting (Claude Code accepts this mid-session). */
+  configure({ model, effort }) {
+    if (!this.proc) return;
+    if (model && model !== this.currentModel) { this.write({ type: 'control_request', request_id: 'm' + Date.now(), request: { subtype: 'set_model', model } }); this.currentModel = model; }
+    if (effort && effort !== this.currentEffort) { this.write({ type: 'control_request', request_id: 'e' + Date.now(), request: { subtype: 'apply_flag_settings', settings: { effortLevel: effort } } }); this.currentEffort = effort; }
   }
 
   /** Sends one user message (text, optionally with images as {mime, base64}). */
@@ -158,6 +167,7 @@ class ClaudeBrain extends EventEmitter {
       }
       case 'assistant': {
         if (!this.busy || this.outstanding > 1) break;
+        if (m.message && m.message.model && m.message.model !== '<synthetic>') { this.lastModel = m.message.model; this.emit('modelUsed', m.message.model); }
         const parts = (m.message && m.message.content) || [];
         const text = parts.filter((p) => p.type === 'text').map((p) => p.text).join('').trim();
         if (text) { this.lastReply = text; this.emit('reply', text); }

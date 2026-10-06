@@ -599,6 +599,18 @@ window.bluey.on('overlay:speak', (m) => {
   window.__lastSpeech = { text: m.text, voice: v && v.name, at: Date.now() };
   speechSynthesis.speak(u);
 });
+// The natural neural voice arrives as an MP3.
+let voiceAudio = null;
+window.bluey.on('overlay:playAudio', (m) => {
+  if (voiceAudio) { try { voiceAudio.pause(); } catch {} voiceAudio = null; }
+  if (!m) return;
+  speechSynthesis.cancel();
+  const a = new Audio('data:audio/mpeg;base64,' + m.base64);
+  a.volume = m.volume == null ? 0.9 : m.volume;
+  voiceAudio = a;
+  window.__audio = a;
+  a.play().catch((e) => window.bluey.send('overlay:micError', 'Could not play his voice: ' + e.message));
+});
 window.bluey.on('overlay:voices', () => window.bluey.send('overlay:voiceList', voices.map((v) => ({ name: v.name, lang: v.lang }))));
 
 window.bluey.send('overlay:ready', {});

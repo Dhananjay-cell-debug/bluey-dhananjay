@@ -117,6 +117,7 @@
           <div class="brains" id="brains"></div>
           <label class="row"><span>Use</span>
             <select data-key="brain"><option value="auto">Automatic: Claude, else ChatGPT</option><option value="claude">Claude subscription (Claude Code)</option><option value="codex">ChatGPT subscription (Codex)</option></select></label>
+          <label class="check"><input type="checkbox" data-key="autoRoute"> Choose the model and effort for each question automatically (recommended): "hi" is answered fast, real tasks get the smartest model at high effort</label>
           <label class="row"><span>Quick choice</span>
             <select data-key="speed"><option value="fast">Fastest</option><option value="balanced">Balanced</option><option value="smart">Smartest (slower)</option></select></label>
           <p class="small">Or pick exactly (blank = the quick choice). Higher effort thinks longer: smarter, but slower and uses more of your plan.</p>
@@ -158,6 +159,9 @@
           <label class="check"><input type="checkbox" data-key="showCursor"> Show his cursor</label>
           <label class="check"><input type="checkbox" data-key="captions"> Show his replies as speech bubbles</label>
           <label class="check"><input type="checkbox" data-key="speakReplies"> Speak his replies out loud (on this PC)</label>
+          <label class="row"><span>His voice</span><select data-key="speakEngine"><option value="neural">Natural voice (needs internet, free, no account)</option><option value="windows">This PC's Windows voice (offline)</option></select></label>
+          <label class="row"><span>Which voice</span><select data-key="speakNeuralVoice" id="neuralVoices"></select></label>
+          <div class="row-end"><button class="ghost" id="hearHer">Hear her</button></div>
           <label class="row"><span>Chirp volume (PC)</span><input type="range" min="0" max="1" step="0.05" data-key="chirpVolume" data-type="number"></label>
           <div class="row-end"><button class="ghost" id="talkTest">Talk test</button></div>
         </div>

@@ -252,3 +252,28 @@ test('a phone screen dump becomes N ids with kinds, grid positions and password 
   assert.equal(n[4].label, 'password field');
   assert.ok(n[4].password && !JSON.stringify(n).includes('hunter2'), 'passwords never reach the brain');
 });
+
+// ───────────── Choosing how hard to think ─────────────
+
+test('the router answers chat fast and gives real tasks the smartest model', () => {
+  const { classify, plan } = require('../src/main/router');
+  const tier = (q) => classify(q).tier;
+  for (const q of ['hi', 'Hey Bluey', 'thanks!', 'good morning', 'how are you', 'I love you, baby.', 'bye']) assert.equal(tier(q), 'quick', q);
+  for (const q of ["what's this?", 'what does this button do?', 'what time is it in Tokyo']) assert.equal(tier(q), 'standard', q);
+  for (const q of ['On my phone, open the Claude app and say hi to Claude.', 'open WhatsApp and message Mum that I am late', 'research the best laptop under 60000 and compare three',
+    'this is a difficult one, plan my week step by step', 'write a python script that renames my photos by date and explain it']) assert.equal(tier(q), 'deep', q);
+  assert.equal(classify('think as hard as you can about this').max, true);
+  // Claude: sonnet/low for chat, Opus medium normally, Opus high for tasks, max when asked.
+  assert.deepEqual(plan('quick', 'claude'), { model: 'sonnet', effort: 'low' });
+  assert.deepEqual(plan('standard', 'claude'), { model: 'opus', effort: 'medium' });
+  assert.deepEqual(plan('deep', 'claude'), { model: 'opus', effort: 'high' });
+  assert.deepEqual(plan('deep', 'claude', {}, [], true), { model: 'opus', effort: 'max' });
+  assert.deepEqual(plan('deep', 'claude', { model: 'fable', effort: 'xhigh' }), { model: 'fable', effort: 'xhigh' });
+  // Codex: the small Luna model for chat; the plan's default for the rest; efforts the model doesn't support are lowered.
+  const models = [{ id: 'gpt-6.1-sol', isDefault: true, efforts: ['low', 'medium', 'high', 'xhigh', 'max'] }, { id: 'gpt-6-luna', efforts: ['low', 'medium', 'high'] }, { id: 'gpt-5.6-luna', efforts: ['low'] }];
+  assert.deepEqual(plan('quick', 'codex', {}, models), { model: 'gpt-6-luna', effort: 'low' });
+  assert.deepEqual(plan('standard', 'codex', {}, models), { model: 'gpt-6.1-sol', effort: 'medium' });
+  assert.deepEqual(plan('deep', 'codex', {}, models), { model: 'gpt-6.1-sol', effort: 'high' });
+  assert.deepEqual(plan('deep', 'codex', {}, models, true), { model: 'gpt-6.1-sol', effort: 'max' });
+  assert.deepEqual(plan('deep', 'codex', {}, [{ id: 'x', isDefault: true, efforts: ['low', 'medium'] }]), { model: 'x', effort: 'medium' });
+});

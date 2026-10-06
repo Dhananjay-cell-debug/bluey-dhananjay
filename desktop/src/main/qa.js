@@ -447,17 +447,40 @@ async function run(ctx, scenarios, out) {
       { brain: bluey.brainName, tools, reply: turn.text, error: turn.error, ms: turn.ms });
   }
 
+  if (scenarios.includes('route')) {
+    // "hi" should be answered by the small fast model; a real task by Opus at high effort.
+    if (bluey.awake) { bluey.sleep(); await sleep(800); }
+    settings.data.autoRoute = true; settings.data.brain = 'claude';
+    await bluey.wake('pc'); await sleep(800);
+    const ran = [];
+    for (const q of ['hi', 'Think this through carefully, step by step: how many different ways can I climb 10 stairs taking 1 or 2 steps at a time? Show the working.']) {
+      const used = [];
+      const onModel = (m) => used.push(m);
+      bluey.brain.on('modelUsed', onModel);
+      const turnP = waitTurn(bluey);
+      bluey.ask(q, true);
+      const turn = await turnP;
+      bluey.brain.removeListener('modelUsed', onModel);
+      ran.push({ q: q.slice(0, 30), route: bluey.lastRoute && `${bluey.lastRoute.tier}:${bluey.lastRoute.model}/${bluey.lastRoute.effort}`, modelsUsed: [...new Set(used)], ms: turn.firstTextMs, reply: turn.text.slice(0, 80) });
+      await sleep(500);
+    }
+    const ok = /sonnet/i.test(ran[0].modelsUsed.join()) && /opus/i.test(ran[1].modelsUsed.join()) && ran[0].route.startsWith('quick') && ran[1].route.startsWith('deep');
+    record('route', ok, { ran });
+  }
+
   if (scenarios.includes('speak')) {
     // He should actually start speaking when a reply finishes.
-    overlay.send('overlay:speak', { text: 'Hello, I am Bluey, and I can talk now.', volume: 0.8 });
-    let speaking = false, info = null;
-    for (let i = 0; i < 20 && !speaking; i++) {
-      await sleep(200);
-      info = await overlay.window.webContents.executeJavaScript('({ speaking: speechSynthesis.speaking || speechSynthesis.pending, voices: speechSynthesis.getVoices().length, last: window.__lastSpeech })');
-      speaking = info.speaking;
+    const spoke = new Promise((resolve) => { bluey.once('spoke', resolve); setTimeout(() => resolve(null), 30000); });
+    bluey.speak('Hello, I am Bluey, and I can talk now.');
+    const how = await spoke;
+    let info = null, playing = false;
+    for (let i = 0; i < 20 && !playing; i++) {
+      await sleep(250);
+      info = await overlay.window.webContents.executeJavaScript('({ audio: !!window.__audio && !window.__audio.paused && !window.__audio.ended, secs: window.__audio ? window.__audio.duration : 0, win: speechSynthesis.speaking })');
+      playing = info.audio || info.win;
     }
-    overlay.send('overlay:speak', null);
-    record('speak', speaking, info);
+    bluey.clearCaption();
+    record('speak', playing, { ...info, engine: how && how.engine, voice: how && how.voice, ms: how && how.ms });
   }
 
   if (scenarios.includes('notes')) {

@@ -8,6 +8,7 @@ const { EventEmitter } = require('events');
 const DEFAULTS = {
   brain: 'auto',            // auto | claude | codex
   speed: 'balanced',        // fast | balanced | smart
+  autoRoute: true,          // pick the model and effort for each question (quick chat is fast, tasks get the smartest)
   claudeModel: '',          // empty = from "speed" (sonnet); or fable, opus, sonnet, haiku, or a full model name
   claudeEffort: '',         // empty = from "speed"; or low, medium, high, xhigh, max
   codexModel: '',           // empty = the ChatGPT plan's default
@@ -32,7 +33,9 @@ const DEFAULTS = {
   chirpVolume: 0.7,
   captions: true,
   speakReplies: true,       // read his replies out loud (Windows voices, on this PC); the bubble still shows
-  speakVoice: '',           // empty = a British English voice if there is one
+  speakEngine: 'neural',    // neural (natural online voices, no key) | windows (this PC's own voices)
+  speakNeuralVoice: 'en-US-AvaMultilingualNeural',
+  speakVoice: '',           // Windows voice name (only for the windows engine / as the fallback)
   faceOnDesktop: true,      // his face at the bottom of the screen when no phone is connected
   autoLook: true,           // send a fresh look at the screen with every question (faster answers)
   notesFolder: '',          // empty = Documents/Bluey Notes

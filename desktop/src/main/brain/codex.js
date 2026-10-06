@@ -95,6 +95,9 @@ class CodexBrain extends EventEmitter {
     this.emit('ready', { model: result.model || this.o.model || 'default' });
   }
 
+  /** Model and effort for the next question (Codex takes these on every turn). */
+  configure({ model, effort }) { this.turnModel = model || null; this.turnEffort = effort || null; }
+
   async ask(text, images = []) {
     if (!this.proc) this.start();
     if (this.busy) this.interrupt();
@@ -108,7 +111,10 @@ class CodexBrain extends EventEmitter {
       await this.starting;
       const input = [{ type: 'text', text, text_elements: [] }];
       for (const img of images) input.push({ type: 'image', url: `data:${img.mime};base64,${img.base64}` });
-      const r = await this.request('turn/start', { threadId: this.threadId, input });
+      const turn = { threadId: this.threadId, input };
+      if (this.turnModel) turn.model = this.turnModel;
+      if (this.turnEffort) turn.effort = this.turnEffort;
+      const r = await this.request('turn/start', turn);
       this.turnId = r && r.turn && r.turn.id;
     } catch (e) {
       this.finishTurn('', 'Codex had a problem: ' + String(e.message || e).slice(0, 160));

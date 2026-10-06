@@ -12,6 +12,8 @@ const { AudioSession } = require('./audio');
 const { ClaudeBrain } = require('./brain/claude');
 const { CodexBrain } = require('./brain/codex');
 const prompts = require('./prompts');
+const router = require('./router');
+const edgeTts = require('./edge-tts');
 
 const MOOD_FOR_STATE = { asleep: null, waking: 'happy', listening: null, asking: 'listening', thinking: 'thinking', speaking: 'talking' };
 
@@ -31,6 +33,7 @@ class Bluey extends EventEmitter {
     this.caption = '';
     this.captionTimer = null;
     this.sleepAfterReply = false;
+    this.speechId = 0;
     this.chirpedThisTurn = false;
     this.lastError = null;
 
@@ -212,6 +215,7 @@ class Bluey extends EventEmitter {
       if (!this.brain) this.startBrain();
       this.chirpedThisTurn = false;
       this.askedAt = Date.now();
+      this.route(question, typed);
       this.brain.ask(message, look && look.image ? [{ mime: 'image/jpeg', base64: look.image }] : []);
     } catch (e) {
       this.fail(e.message);
@@ -286,6 +290,19 @@ class Bluey extends EventEmitter {
     });
     brain.start();
     this.emit('brain', { name, ready: false, starting: true });
+  }
+
+  /** Chooses how hard to think about this question (see router.js) and tells the brain. */
+  route(question, typed) {
+    if (!this.settings.get('autoRoute') || !this.brain || !this.brain.configure) { this.lastRoute = null; return; }
+    const c = router.classify(question, { typed });
+    const pick = this.brainName === 'codex'
+      ? { model: this.settings.get('codexModel'), effort: this.settings.get('codexEffort') }
+      : { model: this.settings.get('claudeModel'), effort: this.settings.get('claudeEffort') };
+    const plan = router.plan(c.tier, this.brainName, pick, this.codexModels || [], c.max);
+    this.brain.configure(plan);
+    this.lastRoute = { tier: c.tier, why: c.why, ...plan, brain: this.brainName };
+    this.emit('route', this.lastRoute);
   }
 
   stopBrain() {
@@ -374,7 +391,7 @@ class Bluey extends EventEmitter {
     clearTimeout(this.captionTimer);
     this.caption = text;
     if (this.settings.get('captions')) this.overlay.send('overlay:caption', text);
-    if (done && this.settings.get('speakReplies')) this.overlay.send('overlay:speak', { text, voice: this.settings.get('speakVoice'), volume: this.settings.get('chirpVolume') });
+    if (done && this.settings.get('speakReplies')) this.speak(text);
     this.phones.broadcast({ t: 'caption', text, done });
     this.emit('caption', { text, done });
     if (done) {
@@ -387,7 +404,30 @@ class Bluey extends EventEmitter {
     }
   }
 
+  /** Reads a reply aloud: a natural neural voice if we can reach it, otherwise this PC's own voice. */
+  async speak(text) {
+    const mine = ++this.speechId;
+    const volume = this.settings.get('chirpVolume');
+    const windows = () => this.overlay.send('overlay:speak', { text, voice: this.settings.get('speakVoice'), volume });
+    if (this.settings.get('speakEngine') !== 'neural') return windows();
+    const voice = /[\u0900-\u097F]/.test(text) ? 'hi-IN-SwaraNeural' : this.settings.get('speakNeuralVoice');
+    try {
+      const t0 = Date.now();
+      const mp3 = await edgeTts.synth(text.replace(/[*_`#]/g, ''), { voice });
+      if (mine !== this.speechId) return;  // he was interrupted or went to sleep meanwhile
+      this.overlay.send('overlay:playAudio', { base64: mp3.toString('base64'), volume: Math.max(0.3, Math.min(1, volume + 0.2)) });
+      this.emit('spoke', { engine: 'neural', voice, ms: Date.now() - t0 });
+    } catch (e) {
+      if (mine !== this.speechId) return;
+      this.emit('warning', 'Neural voice unavailable (' + e.message + '); using the Windows voice.');
+      windows();
+      this.emit('spoke', { engine: 'windows', error: e.message });
+    }
+  }
+
   clearCaption() {
+    this.speechId = (this.speechId || 0) + 1;
+    this.overlay.send('overlay:playAudio', null);
     this.overlay.send('overlay:speak', null);  // stop talking
     clearTimeout(this.captionTimer);
     this.caption = '';

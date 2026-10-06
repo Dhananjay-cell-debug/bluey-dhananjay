@@ -79,7 +79,8 @@ function brainSummary() {
   const ears = w.state === 'ready' ? 'ears ready' : w.state === 'downloading' ? `downloading ears ${w.detail || 0}%` : w.state === 'error' ? 'ears: problem' : 'ears warming up';
   const u = status.usage;
   const plan = u && u.fiveHour != null ? ` · ${Math.round(u.fiveHour * 100)}% of 5-hour limit used` : '';
-  return `${label} subscription · ${ears}${plan}`;
+  const rt = status.route ? ` · last: ${status.route.tier} (${status.route.model} ${status.route.effort})` : '';
+  return `${label} subscription · ${ears}${plan}${rt}`;
 }
 
 function renderStatus() {
@@ -313,6 +314,8 @@ let modelChoices = null;
 async function loadModels() {
   modelChoices = await api.invoke('panel:models');
   const opt = (v, label) => `<option value="${esc(v)}">${esc(label)}</option>`;
+  $('neuralVoices').innerHTML = (modelChoices.voices || []).map((v) => opt(v.id, v.name)).join('');
+  $('neuralVoices').value = settings.speakNeuralVoice || 'en-US-AvaMultilingualNeural';
   $('claudeModel').innerHTML = opt('', 'From quick choice') + modelChoices.claude.models.map((m) => opt(m.id, m.name)).join('');
   $('claudeEffort').innerHTML = opt('', 'From quick choice') + modelChoices.claude.efforts.map((e) => opt(e, e)).join('');
   $('codexModel').innerHTML = opt('', "Your plan's newest default (updates itself)") + (modelChoices.codex || []).map((m) => opt(m.id, m.name + (m.isDefault ? ' (default)' : ''))).join('');
@@ -354,6 +357,7 @@ document.querySelectorAll('[data-key]').forEach((el) => {
     el.addEventListener('change', commit);
   }
 });
+$('hearHer').onclick = () => api.invoke('panel:speakTest');
 $('resetPersonality').onclick = () => { $('personality').value = defaultPersonality; api.invoke('panel:settings', { personality: '' }).then((s) => { settings = s; }); };
 $('talkTest').onclick = () => { talkUntil = performance.now() / 1000 + 3; api.invoke('panel:talkTest'); };
 
