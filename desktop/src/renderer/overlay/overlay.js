@@ -575,6 +575,32 @@ window.bluey.on('overlay:dragging', (on) => { engine.dragging = on; });
 window.bluey.on('overlay:talkTest', (seconds) => { engine.talkUntil = clock() + (seconds || 3); });
 window.bluey.on('overlay:brain', ({ awake, mood }) => { engine.awake = !!awake; engine.brainMood = mood || null; });
 window.bluey.on('overlay:chirp', ({ syllables, volume }) => window.BlueyChirp && window.BlueyChirp.play(syllables, volume));
+// ───────────── His voice ─────────────
+// Replies are read out with the PC's own voices (free, offline). A British English voice if there is one;
+// Hindi text gets a Hindi voice if installed.
+let voices = [];
+const loadVoices = () => { voices = speechSynthesis.getVoices(); };
+loadVoices();
+speechSynthesis.onvoiceschanged = loadVoices;
+function pickVoice(text, wanted) {
+  if (wanted) { const v = voices.find((x) => x.name === wanted); if (v) return v; }
+  if (/[\u0900-\u097F]/.test(text)) { const hi = voices.find((x) => /^hi/i.test(x.lang)); if (hi) return hi; }
+  const rank = (v) => (/en-GB/i.test(v.lang) ? 3 : 0) + (/male|george|ryan|thomas|david|guy/i.test(v.name) && !/female|susan|hazel|zira/i.test(v.name) ? 2 : 0) + (/online|natural/i.test(v.name) ? 1 : 0) + (/^en/i.test(v.lang) ? 1 : 0);
+  return [...voices].sort((a, b) => rank(b) - rank(a))[0] || null;
+}
+window.bluey.on('overlay:speak', (m) => {
+  speechSynthesis.cancel();
+  if (!m || !m.text) return;
+  const u = new SpeechSynthesisUtterance(m.text.replace(/[*_`#]/g, ''));
+  const v = pickVoice(m.text, m.voice);
+  if (v) { u.voice = v; u.lang = v.lang; }
+  u.rate = 1.05;
+  u.volume = Math.max(0.2, Math.min(1, m.volume == null ? 0.8 : m.volume + 0.2));
+  window.__lastSpeech = { text: m.text, voice: v && v.name, at: Date.now() };
+  speechSynthesis.speak(u);
+});
+window.bluey.on('overlay:voices', () => window.bluey.send('overlay:voiceList', voices.map((v) => ({ name: v.name, lang: v.lang }))));
+
 window.bluey.send('overlay:ready', {});
 
 // ───────────── This PC's microphone (when the phone isn't the mic) ─────────────

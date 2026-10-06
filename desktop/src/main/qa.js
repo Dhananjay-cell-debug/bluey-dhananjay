@@ -447,6 +447,19 @@ async function run(ctx, scenarios, out) {
       { brain: bluey.brainName, tools, reply: turn.text, error: turn.error, ms: turn.ms });
   }
 
+  if (scenarios.includes('speak')) {
+    // He should actually start speaking when a reply finishes.
+    overlay.send('overlay:speak', { text: 'Hello, I am Bluey, and I can talk now.', volume: 0.8 });
+    let speaking = false, info = null;
+    for (let i = 0; i < 20 && !speaking; i++) {
+      await sleep(200);
+      info = await overlay.window.webContents.executeJavaScript('({ speaking: speechSynthesis.speaking || speechSynthesis.pending, voices: speechSynthesis.getVoices().length, last: window.__lastSpeech })');
+      speaking = info.speaking;
+    }
+    overlay.send('overlay:speak', null);
+    record('speak', speaking, info);
+  }
+
   if (scenarios.includes('notes')) {
     if (bluey.awake) bluey.sleep();
     await sleep(800);

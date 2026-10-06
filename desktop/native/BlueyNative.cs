@@ -108,6 +108,25 @@ namespace Bluey
                 case "openApp": return Ok("text", Apps.Open(S(r, "name")));
                 case "apps": return Ok("apps", Apps.List().Select(a => a.Key).ToArray());
                 case "foreground": return Foreground();
+                case "rects":
+                    {
+                        var all = new List<object>();
+                        Native.EnumWindows((h, l) =>
+                        {
+                            if (!Native.IsWindowVisible(h)) return true;
+                            Native.RECT rr; if (!Native.GetWindowRect(h, out rr)) return true;
+                            all.Add(new Dictionary<string, object> { { "hwnd", h.ToInt64() }, { "x", rr.Left }, { "y", rr.Top }, { "w", rr.Right - rr.Left }, { "h", rr.Bottom - rr.Top }, { "title", Native.WindowTitle(h) }, { "app", Apps.ProcessName(h) ?? "" } });
+                            return true;
+                        }, IntPtr.Zero);
+                        return Ok("windows", all.ToArray());
+                    }
+                case "focusHwnd": Native.Focus(new IntPtr((long)D(r, "hwnd"))); return Ok();
+                case "frontRect":
+                    {
+                        Native.RECT rc; var fgw = Native.GetForegroundWindow();
+                        if (!Native.GetWindowRect(fgw, out rc)) return Fail("no window");
+                        return Ok("x", rc.Left, "y", rc.Top, "w", rc.Right - rc.Left, "h", rc.Bottom - rc.Top, "title", Native.WindowTitle(fgw), "app", Apps.ProcessName(fgw));
+                    }
                 case "windows": return Program.Ok("windows", Switcher.Windows());
                 case "tabs": return Program.Ok("tabs", Switcher.Tabs((long)D(r, "hwnd", 0)));
                 case "switchTo": return Program.Ok("text", Switcher.SwitchTo(S(r, "name"), S(r, "kind", "any")));
@@ -895,6 +914,8 @@ namespace Bluey
     static class Native
     {
         [StructLayout(LayoutKind.Sequential)] public struct POINT { public int X, Y; }
+        [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
+        [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
         [StructLayout(LayoutKind.Sequential)] public struct MOUSEINPUT { public int dx, dy; public int mouseData; public uint dwFlags, time; public IntPtr dwExtraInfo; }
         [StructLayout(LayoutKind.Sequential)] public struct KEYBDINPUT { public ushort wVk, wScan; public uint dwFlags, time; public IntPtr dwExtraInfo; }
         [StructLayout(LayoutKind.Explicit)] public struct InputUnion { [FieldOffset(0)] public MOUSEINPUT mi; [FieldOffset(0)] public KEYBDINPUT ki; }

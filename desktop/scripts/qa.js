@@ -42,7 +42,7 @@ step('native helper self-test', () => {
   return [r.status === 0 || locked, locked ? 'screen is locked (capture works, nothing to read) ' + first : first];
 });
 
-const scenarios = quick ? 'visual,panel,brain' : 'facerate,visual,panel,look,brain,voice,phone,phonecontrol,speakers,tabs,latency,notes';
+const scenarios = quick ? 'visual,panel,brain' : 'facerate,visual,panel,look,brain,voice,phone,phonecontrol,speakers,speak,tabs,latency,notes';
 step(`app scenarios (${scenarios})`, () => {
   const electron = require('electron');
   const env = { ...process.env, BLUEY_QA: scenarios, BLUEY_QA_OUT: out };

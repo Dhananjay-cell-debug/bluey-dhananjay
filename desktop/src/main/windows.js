@@ -36,7 +36,8 @@ class OverlayController extends EventEmitter {
       x: b.x, y: b.y, width: b.width, height: b.height,
       transparent: true, frame: false, resizable: false, movable: false, focusable: false, skipTaskbar: true,
       hasShadow: false, show: false, alwaysOnTop: true, fullscreenable: false, backgroundColor: '#00000000',
-      webPreferences: { preload: PRELOAD, backgroundThrottling: false, contextIsolation: true, nodeIntegration: false },
+      webPreferences: { preload: PRELOAD, backgroundThrottling: false, contextIsolation: true, nodeIntegration: false,
+        autoplayPolicy: 'no-user-gesture-required' },  // so he may speak without anyone clicking first
     });
     win.setAlwaysOnTop(true, 'screen-saver');
     win.setIgnoreMouseEvents(true);

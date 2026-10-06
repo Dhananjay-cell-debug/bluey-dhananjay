@@ -374,6 +374,7 @@ class Bluey extends EventEmitter {
     clearTimeout(this.captionTimer);
     this.caption = text;
     if (this.settings.get('captions')) this.overlay.send('overlay:caption', text);
+    if (done && this.settings.get('speakReplies')) this.overlay.send('overlay:speak', { text, voice: this.settings.get('speakVoice'), volume: this.settings.get('chirpVolume') });
     this.phones.broadcast({ t: 'caption', text, done });
     this.emit('caption', { text, done });
     if (done) {
@@ -387,6 +388,7 @@ class Bluey extends EventEmitter {
   }
 
   clearCaption() {
+    this.overlay.send('overlay:speak', null);  // stop talking
     clearTimeout(this.captionTimer);
     this.caption = '';
     this.overlay.send('overlay:caption', null);

@@ -31,6 +31,8 @@ const DEFAULTS = {
   pttChord: 'ctrl+alt+space',
   chirpVolume: 0.7,
   captions: true,
+  speakReplies: true,       // read his replies out loud (Windows voices, on this PC); the bubble still shows
+  speakVoice: '',           // empty = a British English voice if there is one
   faceOnDesktop: true,      // his face at the bottom of the screen when no phone is connected
   autoLook: true,           // send a fresh look at the screen with every question (faster answers)
   notesFolder: '',          // empty = Documents/Bluey Notes
