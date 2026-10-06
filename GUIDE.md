@@ -54,3 +54,16 @@ Everything between them is encrypted.
 You don't need to do anything. Bluey uses "the newest Opus" and "your ChatGPT plan's newest default", and updates
 Claude Code and Codex twice a day while he's asleep, so new models (new Opus/Sonnet, new Sol/Astra/Luna) show up
 on their own.
+
+## Redmi / Xiaomi: keep Bluey's phone access alive
+
+MIUI kills background services, which is why Bluey can suddenly "lose access" to the phone. Do this once:
+1. Settings → Apps → Manage apps → **Bluey** → **Autostart: ON**.
+2. Same page → **Battery saver** → **No restrictions**.
+3. Recent apps (the square button) → press and hold the Bluey card → tap the **lock** icon.
+4. Settings → Accessibility → Bluey → make sure it is still **ON** (turn it off and on again if Bluey says it lost access).
+
+## His voice and thinking
+
+- He speaks with a natural voice (Settings → "His voice"; press **Hear her**). Pick Ava, Emma, Jenny, Aria, Neerja (Indian English) or Swara (Hindi).
+- He chooses how hard to think for each question: "hi" is answered quickly by a small model; real tasks (using your phone, research, hard problems) get Opus at high effort. Switch this off in Settings → Brain → "Choose the model and effort automatically".

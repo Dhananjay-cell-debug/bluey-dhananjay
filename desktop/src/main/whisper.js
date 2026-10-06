@@ -178,7 +178,8 @@ class Whisper extends EventEmitter {
   }
 
   static clean(text) {
-    let t = String(text || '').replace(/\[[^\]]*\]|\([^)]*(music|noise|silence|blank|inaudible|applause|laugh)[^)]*\)/gi, ' ')
+    let t = String(text || '').replace(/[\u266A\u266B\u266C\u2669]+/g, ' ')  // music notes
+      .replace(/\[[^\]]*\]|\([^)]*(music|noise|silence|blank|inaudible|applause|laugh)[^)]*\)/gi, ' ')
       .replace(/\s+/g, ' ').trim();
     if (HALLUCINATIONS.test(t)) return '';
     return t;

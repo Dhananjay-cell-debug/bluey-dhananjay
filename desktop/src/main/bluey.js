@@ -168,7 +168,7 @@ class Bluey extends EventEmitter {
     if (!clip || clip.seconds < 0.3 || clip.level < 0.003) return this.didntCatch();
     let text = '';
     try {
-      text = await this.whisper.transcribe(clip.audio, { urgent: true });
+      text = await this.whisper.transcribe(clip.audio, { urgent: true, prompt: this.vocabulary() });
       this.timing = { released, transcribed: Date.now(), seconds: clip.seconds };
       this.emit('timing', { stage: 'transcribed', ms: Date.now() - released, audioSeconds: clip.seconds });
     } catch (e) {
@@ -195,6 +195,12 @@ class Bluey extends EventEmitter {
       return;
     }
     this.ask(text, true);
+  }
+
+  /** Words speech recognition should expect (names of apps and of the assistant), so it stops hearing "floor" for "Claude". */
+  vocabulary() {
+    const name = (this.settings.get('userName') || '').trim();
+    return `Hey Bluey. Claude, ChatGPT, WhatsApp, GPay, Instagram, YouTube, Chrome, Spotify, Gmail, Telegram, Paytm, PhonePe, Amazon, Flipkart. Open the app on my phone.${name ? ' ' + name + '.' : ''}`;
   }
 
   async ask(question, typed) {
@@ -225,7 +231,7 @@ class Bluey extends EventEmitter {
 
   async onUtterance(u) {
     try {
-      const text = await this.whisper.transcribe(u.audio);
+      const text = await this.whisper.transcribe(u.audio, { prompt: this.vocabulary() });
       if (!text || !this.awake) return;
       const time = new Date(u.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       this.overheard.push({ time, text });
