@@ -58,6 +58,8 @@ class Diarizer extends EventEmitter {
     this.busy = true;
     const job = this.queue.shift();
     try {
+      // An empty session's folder is deleted when it ends; its audio chunk is gone, so there's nothing to label.
+      if (!fs.existsSync(job.file)) { job.resolve([]); return; }
       await this.ensureModels();
       const result = await new Promise((resolve) => {
         execFile(process.execPath, [this.worker, job.file, this.modelDir, this.sherpaPath],

@@ -2,7 +2,7 @@
 // with his own big cursor, and thinks with your Claude or ChatGPT subscription (no API keys).
 'use strict';
 
-const { app, Tray, Menu, globalShortcut, ipcMain, clipboard, shell, nativeImage, dialog, screen, session: electronSession, Notification } = require('electron');
+const { BrowserWindow, app, Tray, Menu, globalShortcut, ipcMain, clipboard, shell, nativeImage, dialog, screen, session: electronSession, Notification } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
@@ -480,8 +480,14 @@ app.whenReady().then(async () => {
     // Same six digits on both screens: if they match, it's really your phone.
     overlay.send('overlay:bubble', { text: `Pair ${request.name}? ${request.numbers}`, life: 20 });
     if (panel && !panel.isDestroyed() && panel.isVisible()) panel.webContents.send('panel:tab', 'phone');
+    log('pair request from', request.name, request.numbers);
+    try { fs.writeFileSync(path.join(app.getPath('userData'), 'pair-request.txt'), `${request.name} ${request.numbers}
+`); } catch {}
     if (process.env.BLUEY_QA) return;  // the QA phone answers through the panel API
-    dialog.showMessageBox({
+    // A tiny always-on-top parent keeps the question in front of every other window.
+    const top = new BrowserWindow({ width: 1, height: 1, show: false, alwaysOnTop: true, skipTaskbar: true });
+    top.setAlwaysOnTop(true, 'screen-saver');
+    dialog.showMessageBox(top, {
       type: 'question', title: 'Pair a phone with Bluey', buttons: ['Allow', "Don't allow"], defaultId: 0, cancelId: 1, noLink: true,
       message: `${request.name} wants to pair with Bluey.`,
       detail: `Check that your phone shows the same numbers:
@@ -489,7 +495,7 @@ app.whenReady().then(async () => {
 ${request.numbers}
 
 Only allow it if the numbers match. A paired phone can ask Bluey to use this PC.`,
-    }).then(({ response }) => { if (pairRequest === request) (response === 0 ? request.allow() : request.deny()); });
+    }).then(({ response }) => { top.destroy(); if (pairRequest === request) (response === 0 ? request.allow() : request.deny()); });
   });
   phones.on('phones', () => pushStatus());
   phones.on('warning', (w) => { warnings.push(w); pushStatus(); });
