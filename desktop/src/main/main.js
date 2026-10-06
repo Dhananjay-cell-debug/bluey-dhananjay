@@ -544,6 +544,7 @@ Only allow it if the numbers match. A paired phone can ask Bluey to use this PC.
   });
   phones.on('phones', () => pushStatus());
   phones.on('caps', (c) => log('phone caps:', c.name, 'can use phone =', c.hands, c.lite ? '(Lite app)' : '(Full app)', 'version', c.version, c.versionCode));
+  phones.on('closed', (c) => log('phone link closed:', c.name, c.address, 'code', c.code, c.reason, 'after', c.seconds + 's', c.paired ? '(paired)' : '(not paired)'));
   phones.on('updateOffered', (u) => log('phone update offered:', u.name, u.from, '->', u.to));
   phones.on('updateStatus', (u) => log('phone update:', u.name, u.state, u.detail));
   phones.on('warning', (w) => { warnings.push(w); pushStatus(); });

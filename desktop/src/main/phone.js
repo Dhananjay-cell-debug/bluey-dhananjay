@@ -134,7 +134,9 @@ class PhoneServer extends EventEmitter {
       try { m = JSON.parse(frame.payload.toString('utf8')); } catch { return; }
       this.onMessage(ws, info, m);
     });
-    ws.on('close', () => {
+    const since = Date.now();
+    ws.on('close', (code, reason) => {
+      this.emit('closed', { name: info.name, address: info.address, code, reason: String(reason || ''), seconds: Math.round((Date.now() - since) / 1000), paired: info.paired });
       this.phones.delete(ws);
       if (info.pub) {
         const p = this.pending.get(info.pub);

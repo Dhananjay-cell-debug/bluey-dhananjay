@@ -7,11 +7,17 @@ const os = require('os');
 const crypto = require('crypto');
 
 const root = path.resolve(__dirname, '..', '..');
-const built = path.join(root, 'android', 'app', 'build', 'outputs', 'apk', 'release', 'app-release.apk');
+const built = path.join(root, 'android', 'app', 'build', 'outputs', 'apk', 'full', 'release', 'app-full-release.apk');
 const gradle = fs.readFileSync(path.join(root, 'android', 'app', 'build.gradle.kts'), 'utf8');
 const versionCode = Number(/versionCode\s*=\s*(\d+)/.exec(gradle)[1]);
 const versionName = /versionName\s*=\s*"([^"]+)"/.exec(gradle)[1];
 if (!fs.existsSync(built)) throw new Error('Build the app first: ' + built);
+// Guard: the file really is the version we are about to announce (a stale build once got published by mistake).
+const aapt2 = path.join(process.env.ANDROID_HOME || 'F:/toolchains/android-sdk', 'build-tools', '35.0.0', 'aapt2.exe');
+if (fs.existsSync(aapt2)) {
+  const badging = require('child_process').execFileSync(aapt2, ['dump', 'badging', built], { encoding: 'utf8' });
+  if (!badging.includes(`versionCode='${versionCode}'`)) throw new Error('The built APK is not version ' + versionCode + ': ' + badging.split(String.fromCharCode(10))[0]);
+}
 const bytes = fs.readFileSync(built);
 const meta = { versionCode, versionName, size: bytes.length, sha256: crypto.createHash('sha256').update(bytes).digest('hex') };
 const targets = [path.join(root, 'desktop', 'vendor', 'android'), root, path.join(os.homedir(), 'Desktop')];
