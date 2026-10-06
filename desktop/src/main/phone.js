@@ -13,6 +13,7 @@ const os = require('os');
 const { EventEmitter } = require('events');
 const { WebSocketServer } = require('ws');
 const secure = require('./secure');
+const { apkInfo } = require('./apkinfo');
 
 const PORT = Number(process.env.BLUEY_PHONE_PORT) || 47613;
 const PROTOCOL = 2;
@@ -220,8 +221,24 @@ class PhoneServer extends EventEmitter {
       if (w) { this.asks.delete(m.prid); clearTimeout(w.timer); w.resolve(m); }
       return;
     }
-    if (m.t === 'caps') { info.hands = !!m.hands; info.lite = !!m.lite; this.emit('caps', { name: info.name, hands: info.hands, lite: info.lite }); this.emit('phones', this.list()); return; }
+    if (m.t === 'caps') {
+      info.hands = !!m.hands; info.lite = !!m.lite; info.voice = !!m.voice; info.version = m.version || null; info.versionCode = Number(m.versionCode) || 0;
+      this.emit('caps', { name: info.name, hands: info.hands, lite: info.lite, version: info.version, versionCode: info.versionCode });
+      this.emit('phones', this.list());
+      this.offerUpdate(ws, info);
+      return;
+    }
+    if (m.t === 'updateStatus') { info.update = { state: String(m.state || ''), detail: String(m.detail || '').slice(0, 200), at: Date.now() }; this.emit('updateStatus', { name: info.name, ...info.update }); return; }
+    if (m.t === 'voiceStatus') { info.playback = { id: m.id || null, playing: !!m.playing, error: m.error || null, at: Date.now() }; this.emit('voiceStatus', info.playback); return; }
     this.emit('command', m, info, (reply) => this.send(ws, { ...reply, rid: m.rid }));
+  }
+
+  /** An older phone app is told about the newer Bluey.apk this PC has, with its size and SHA-256, so it can update itself. */
+  offerUpdate(ws, info) {
+    const offer = this.apk && apkInfo(this.apk);
+    if (!offer || !offer.versionCode || !info.versionCode || info.versionCode >= offer.versionCode) return;
+    this.send(ws, { t: 'update', ...offer, path: '/Bluey.apk' });
+    this.emit('updateOffered', { name: info.name, from: info.versionCode, to: offer.versionCode });
   }
 
   /** The phone Bluey can use (hands switched on), preferring the one that's connected now. */
@@ -255,6 +272,17 @@ class PhoneServer extends EventEmitter {
 
   list() { return [...this.phones.values()].filter((p) => p.paired).map((p) => p.name); }
   get connected() { return this.list().length > 0; }
+
+  /** Speak on one connected phone; older apps keep using the PC speaker. */
+  speak(message) {
+    for (const [ws, info] of this.phones) {
+      if (info.paired && info.voice && ws.readyState === 1) {
+        this.send(ws, { ...message, t: 'voice' });
+        return true;
+      }
+    }
+    return false;
+  }
 
   send(ws, obj) {
     const info = this.phones.get(ws);

@@ -65,8 +65,9 @@ class FaceRenderer(private val display: Typeface?) {
     fun draw(c: Canvas, f: FaceFrame, width: Float, height: Float, background: Int = Color.BLACK) {
         c.drawColor(background)
         c.save()
-        val scale = max(width / DESIGN_W, height / DESIGN_H)
-        c.translate((width - DESIGN_W * scale) / 2, height - DESIGN_H * scale)
+        // Keep the crown, eyes and cheeks in view, with room around the face and controls.
+        val scale = min(width / (DESIGN_W + 80f), height / (DESIGN_H + 36f))
+        c.translate((width - DESIGN_W * scale) / 2, height - (DESIGN_H + 14f) * scale)
         c.scale(scale, scale)
 
         // Whole-body motion: breathing, talking bounce, idle hops, and leaning toward what he looks at.

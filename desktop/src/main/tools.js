@@ -22,6 +22,9 @@ const lookTools = [
     "Look something up on the web and put a short report (title plus up to four paragraphs, with sources) on the user's screen. Use for anything you're not sure of, anything recent, or anything that needs facts, prices, news or details. Before calling it, point at the relevant thing if there is one and reply with one short line that ends with \"doing some research…\".",
     { question: { type: 'string', description: 'What to research, as a clear, self-contained question.' } }, ['question']),
   tool('stop_pointing', "Bring your cursor back home when you're done pointing."),
+  tool('learn_memory', 'Save a durable user preference, correction, prompt style, or a workflow you just verified. Use the user’s own instructions as evidence; never store guesses as established facts, temporary task content or credentials. Memory does not authorize future external actions.',
+    { kind: { type: 'string', enum: ['preference', 'workflow', 'prompt_style'] }, text: { type: 'string' }, evidence: { type: 'string', description: 'The user correction or instruction that supports this memory.' } }, ['kind', 'text', 'evidence']),
+  tool('read_learning', 'Read the saved learning guide and preferences.'),
   tool('go_to_sleep',
     "Go back to quietly following the user's mouse with your eyes. Use when the user says bye, thanks that's all, or asks you to sleep."),
 ];

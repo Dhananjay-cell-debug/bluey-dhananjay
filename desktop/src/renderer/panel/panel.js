@@ -135,12 +135,44 @@ function showTab(tab) {
   document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('on', t.id === 'tab-' + tab));
   document.querySelectorAll('nav button').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab || (tab === 'session' && b.dataset.tab === 'sessions')));
   if (tab === 'sessions') loadSessions();
+  if (tab === 'learning') loadLearning();
   if (tab === 'phone') api.invoke('panel:qr').then((q) => { if (q) { $('qr').innerHTML = q.svg; $('qrUrl').textContent = q.url; } });
   if (tab === 'settings' && !$('health').innerHTML) runHealth();
   if (tab === 'chat') { loadLive(); setTimeout(() => $('input').focus(), 50); }
 }
 document.querySelectorAll('nav button').forEach((b) => { b.onclick = () => showTab(b.dataset.tab); });
 api.on('panel:tab', showTab);
+
+let learningGuide = { enabled: true, items: [] };
+async function loadLearning() {
+  learningGuide = await api.invoke('panel:learning');
+  $('learningToggle').textContent = learningGuide.enabled ? 'Learning is on · pause' : 'Learning is paused · resume';
+  const container = $('learningItems');
+  container.replaceChildren();
+  if (!learningGuide.items.length) { const p = document.createElement('p'); p.className = 'small'; p.textContent = 'No memories yet. Teach Bluey a preference, workflow or prompt style.'; container.append(p); }
+  for (const item of learningGuide.items) {
+    const card = document.createElement('div'); card.className = 'card';
+    const title = document.createElement('h3'); title.textContent = item.kind.replace('_', ' ');
+    const field = document.createElement('textarea'); field.value = item.text; field.rows = 4;
+    const source = document.createElement('p'); source.className = 'small'; source.textContent = `${item.source} · used ${item.uses} times`;
+    const save = document.createElement('button'); save.className = 'pill'; save.textContent = 'Save changes';
+    save.onclick = () => changeLearning({ action: 'save', item: { id: item.id, kind: item.kind, text: field.value } });
+    const forget = document.createElement('button'); forget.className = 'ghost danger'; forget.textContent = 'Forget';
+    forget.onclick = () => changeLearning({ action: 'delete', id: item.id });
+    card.append(title, field, source, save, forget); container.append(card);
+  }
+}
+async function changeLearning(action) {
+  try { await api.invoke('panel:learning', action); await loadLearning(); }
+  catch (e) { showToast(e.message); }
+}
+$('learningToggle').onclick = () => changeLearning({ action: 'toggle', enabled: !learningGuide.enabled });
+$('learningSave').onclick = async () => {
+  if (!$('learningDraft').value.trim()) return;
+  try { await api.invoke('panel:learning', { action: 'save', item: { kind: 'preference', text: $('learningDraft').value } }); $('learningDraft').value = ''; await loadLearning(); }
+  catch (e) { showToast(e.message); }
+};
+api.on('panel:learningChanged', () => { if ($('tab-learning').classList.contains('on')) loadLearning(); });
 
 // ───────────── Transcript rendering ─────────────
 
@@ -316,7 +348,7 @@ async function loadModels() {
   modelChoices = await api.invoke('panel:models');
   const opt = (v, label) => `<option value="${esc(v)}">${esc(label)}</option>`;
   $('neuralVoices').innerHTML = (modelChoices.voices || []).map((v) => opt(v.id, v.name)).join('');
-  $('neuralVoices').value = settings.speakNeuralVoice || 'en-US-AvaMultilingualNeural';
+  $('neuralVoices').value = settings.speakNeuralVoice || 'en-US-AriaNeural';
   $('claudeModel').innerHTML = opt('', 'From quick choice') + modelChoices.claude.models.map((m) => opt(m.id, m.name)).join('');
   $('claudeEffort').innerHTML = opt('', 'From quick choice') + modelChoices.claude.efforts.map((e) => opt(e, e)).join('');
   $('codexModel').innerHTML = opt('', "Your plan's newest default (updates itself)") + (modelChoices.codex || []).map((m) => opt(m.id, m.name + (m.isDefault ? ' (default)' : ''))).join('');

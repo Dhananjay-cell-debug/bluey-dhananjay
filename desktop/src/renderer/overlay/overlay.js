@@ -137,11 +137,12 @@ engine.onLaunch = (point) => {
 function clickEffect(point, right) {
   engine.press(0.14, clock());
   ring(point, 38, right ? P.berry3 : P.berry2, 0.85, 0.65);
-  for (let i = 0; i < 6; i++) {
-    const a = i / 6 * 2 * Math.PI + (Math.random() * 0.5 - 0.25);
-    const distance = 34 + Math.random() * 24;
+  effects.push({ kind: 'ring', x: point.x, y: point.y, radius: 48, color: P.berry1, alpha: 0.5, born: clock() + 0.08, life: 0.78 });
+  for (let i = 0; i < 12; i++) {
+    const a = i / 12 * 2 * Math.PI + (Math.random() * 0.5 - 0.25);
+    const distance = 38 + Math.random() * 40;
     star(point, 4 + Math.random() * 3, { x: Math.cos(a) * distance, y: Math.sin(a) * distance },
-      [P.berry1, P.berry2, P.berry3][Math.floor(Math.random() * 3)], 0.55);
+      [P.berry1, P.berry2, P.berry3, '#ffffff'][Math.floor(Math.random() * 4)], 0.74);
   }
 }
 
@@ -574,6 +575,11 @@ window.bluey.on('overlay:press', (depth) => engine.press(depth, clock()));
 window.bluey.on('overlay:dragging', (on) => { engine.dragging = on; });
 window.bluey.on('overlay:talkTest', (seconds) => { engine.talkUntil = clock() + (seconds || 3); });
 window.bluey.on('overlay:brain', ({ awake, mood }) => { engine.awake = !!awake; engine.brainMood = mood || null; });
+window.bluey.on('overlay:model', ({ awake, route }) => {
+  const badge = document.getElementById('model-badge');
+  badge.hidden = !awake;
+  badge.textContent = !route?.model ? '● Ready' : `● ${route.brain === 'local' ? '' : route.brain === 'claude' ? 'Claude · ' : 'Codex · '}${route.model}`;
+});
 window.bluey.on('overlay:chirp', ({ syllables, volume }) => window.BlueyChirp && window.BlueyChirp.play(syllables, volume));
 // ───────────── His voice ─────────────
 // Replies are read out with the PC's own voices (free, offline). A British English voice if there is one;
@@ -588,17 +594,25 @@ function pickVoice(text, wanted) {
   const rank = (v) => (/en-GB/i.test(v.lang) ? 3 : 0) + (/male|george|ryan|thomas|david|guy/i.test(v.name) && !/female|susan|hazel|zira/i.test(v.name) ? 2 : 0) + (/online|natural/i.test(v.name) ? 1 : 0) + (/^en/i.test(v.lang) ? 1 : 0);
   return [...voices].sort((a, b) => rank(b) - rank(a))[0] || null;
 }
-window.bluey.on('overlay:speak', (m) => {
+function speakLocally(m) {
   speechSynthesis.cancel();
   if (!m || !m.text) return;
   const u = new SpeechSynthesisUtterance(m.text.replace(/[*_`#]/g, ''));
   const v = pickVoice(m.text, m.voice);
   if (v) { u.voice = v; u.lang = v.lang; }
   u.rate = 1.05;
-  u.volume = Math.max(0.2, Math.min(1, m.volume == null ? 0.8 : m.volume + 0.2));
+  u.volume = Math.max(0, Math.min(1, m.volume == null ? 0.8 : m.volume));
+  u.onerror = (e) => {
+    window.bluey.send('overlay:voiceStatus', { id: m.id, playing: false });
+    if (e.error !== 'canceled' && e.error !== 'interrupted') window.bluey.send('overlay:micError', 'His voice could not play: ' + e.error);
+  };
   window.__lastSpeech = { text: m.text, voice: v && v.name, at: Date.now() };
+  const playback = window.__lastSpeech;
+  u.onstart = () => { playback.started = true; window.bluey.send('overlay:voiceStatus', { id: m.id, playing: true }); };
+  u.onend = () => { playback.ended = true; window.bluey.send('overlay:voiceStatus', { id: m.id, playing: false }); };
   speechSynthesis.speak(u);
-});
+}
+window.bluey.on('overlay:speak', speakLocally);
 // The natural neural voice arrives as an MP3.
 let voiceAudio = null;
 window.bluey.on('overlay:playAudio', (m) => {
@@ -609,7 +623,17 @@ window.bluey.on('overlay:playAudio', (m) => {
   a.volume = m.volume == null ? 0.9 : m.volume;
   voiceAudio = a;
   window.__audio = a;
-  a.play().catch((e) => window.bluey.send('overlay:micError', 'Could not play his voice: ' + e.message));
+  let failed = false;
+  const fallback = () => {
+    if (failed || voiceAudio !== a) return;
+    failed = true;
+    a.pause(); voiceAudio = null;
+    speakLocally(m);
+  };
+  a.onerror = fallback;
+  a.onplaying = () => { if (voiceAudio === a) window.bluey.send('overlay:voiceStatus', { id: m.id, playing: true }); };
+  a.onended = () => { if (voiceAudio === a) { voiceAudio = null; window.bluey.send('overlay:voiceStatus', { id: m.id, playing: false }); } };
+  a.play().catch(fallback);
 });
 window.bluey.on('overlay:voices', () => window.bluey.send('overlay:voiceList', voices.map((v) => ({ name: v.name, lang: v.lang }))));
 

@@ -165,6 +165,7 @@
         return;
       }
       let duration = Math.min(1.2, Math.max(0.45, 0.4 + 0.12 * Math.log2(1 + distance / 24)));
+      if (this.mode.fast && !this.dragging) duration = Math.min(0.3, Math.max(0.12, 0.08 + distance / 6000));
       if (this.dragging) duration = Math.min(1.6, Math.max(0.6, duration * 1.45));
 
       const dir = { x: dx / distance, y: dy / distance };

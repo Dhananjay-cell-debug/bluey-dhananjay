@@ -17,6 +17,7 @@ const { Host } = require('./host');
 const { OverlayController, ReportCard, FaceDock, createPanel } = require('./windows');
 const { PhoneServer } = require('./phone');
 const { Bluey } = require('./bluey');
+const { Learning } = require('./learning');
 const locate = require('./brain/locate');
 const { research } = require('./brain/research');
 
@@ -50,7 +51,8 @@ const PATHS = {
 let usb = null;
 let adbHands = null;
 let dock = null;
-let settings, notes, whisper, native, overlay, report, phones, host, bluey, tray, panel;
+let settings, notes, whisper, native, overlay, report, phones, host, bluey, tray, panel, learning;
+const timings = [];
 let brainStatus = null;
 let toolServer = null;
 const secret = crypto.randomBytes(24).toString('hex');
@@ -80,6 +82,19 @@ function startToolServer() {
         try {
           if (req.url === '/tools/list') out = { tools: host.tools() };
           else if (req.url === '/tools/call') out = await host.run(String(body.name || '').replace(/^mcp__bluey__/, ''), body.arguments || {});
+          else if (req.url === '/companion/status') out = {
+            state: bluey.state,
+            route: bluey.lastRoute, timings: timings.slice(-30), learning: learning.list(),
+            phones: [...phones.phones.values()].filter(p => p.paired).map(p => ({ name: p.name, hands: !!p.hands, voice: !!p.voice, version: p.version || null, playback: p.playback || null })),
+          };
+          else if (req.url === '/companion/check') {
+            if (body.action === 'wake') await bluey.wake('phone');
+            else if (body.action === 'greet') await bluey.sayHi();
+            else if (body.action === 'sleep') bluey.sleep();
+            else if (body.action === 'ask') bluey.typed(body.text);
+            else throw new Error('Unknown companion check');
+            out = { state: bluey.state };
+          }
           else out = { error: 'unknown' };
         } catch (e) { out = { error: e.message }; }
         resp.writeHead(200, { 'content-type': 'application/json' });
@@ -125,7 +140,20 @@ function status() {
 
 function pushStatus() {
   if (panel && !panel.isDestroyed()) panel.webContents.send('panel:status', status());
+  if (phones && bluey) phones.broadcast({ t: 'status', ...phoneStatus() });
+  if (overlay && bluey) overlay.send('overlay:model', { awake: bluey.awake, route: bluey.lastRoute });
   refreshTray();
+}
+
+function learningCommand(m) {
+  if (m.action === 'toggle') settings.set('learningEnabled', !!m.enabled);
+  else if (m.action === 'save') learning.put({ ...m.item, source: 'Edited by you' });
+  else if (m.action === 'delete') learning.remove(m.id);
+  if (m.action) {
+    phones.broadcast({ t: 'learningChanged' });
+    if (panel && !panel.isDestroyed()) panel.webContents.send('panel:learningChanged');
+  }
+  return learning.list();
 }
 
 async function refreshBrains() {
@@ -282,6 +310,8 @@ function registerShortcuts() {
 // ───────────── Panel and phone commands ─────────────
 
 function wireIpc() {
+  ipcMain.handle('panel:learning', (e, m) => learningCommand(m || {}));
+  ipcMain.on('overlay:voiceStatus', (e, m) => { if (e.sender === overlay.window?.webContents) bluey.speech.played(m); });
   ipcMain.handle('panel:init', () => ({ settings: settings.public(), status: status(), sessions: notes.list(),
     whisperModels: Object.fromEntries(Object.entries(WHISPER_MODELS).map(([k, v]) => [k, v.label])),
     defaultPersonality: require('./prompts').defaultPersonality }));
@@ -352,13 +382,17 @@ function onPhoneCommand(m, info, reply) {
     case 'deleteSession': return reply({ t: 'deleted', ok: notes.delete(m.id) });
     case 'agentPrompt': return reply({ t: 'agentPrompt', text: notes.agentPrompt(m.id) });
     case 'status': return reply({ t: 'status', ...phoneStatus() });
+    case 'learning': {
+      try { return reply({ t: 'learning', ...learningCommand(m) }); }
+      catch (e) { return reply({ t: 'learning', ...learning.list(), error: e.message }); }
+    }
     case 'stop': return host.stopActions();
     default: return undefined;
   }
 }
 
 function phoneStatus() {
-  return { state: bluey.state, brain: bluey.brainName || bluey.chooseBrain(), computerControl: settings.get('computerControl'),
+  return { state: bluey.state, brain: bluey.brainName || bluey.chooseBrain(), route: bluey.lastRoute, computerControl: settings.get('computerControl'),
     whisper: whisper.state, pc: require('os').hostname() };
 }
 
@@ -447,6 +481,7 @@ app.on('second-instance', () => showPanel());
 
 app.whenReady().then(async () => {
   settings = new Settings(path.join(app.getPath('userData'), 'settings.json'));
+  learning = new Learning(path.join(app.getPath('userData'), 'learning.json'), settings);
   notes = new NotesStore(notesRoot(), { userName: settings.get('userName') });
   settings.on('change', (k) => {
     if (k === 'userName') notes.userName = settings.get('userName');
@@ -508,7 +543,9 @@ Only allow it if the numbers match. A paired phone can ask Bluey to use this PC.
     }).then(({ response }) => { top.destroy(); if (pairRequest === request) (response === 0 ? request.allow() : request.deny()); });
   });
   phones.on('phones', () => pushStatus());
-  phones.on('caps', (c) => log('phone caps:', c.name, 'can use phone =', c.hands, c.lite ? '(Lite app)' : '(Full app)'));
+  phones.on('caps', (c) => log('phone caps:', c.name, 'can use phone =', c.hands, c.lite ? '(Lite app)' : '(Full app)', 'version', c.version, c.versionCode));
+  phones.on('updateOffered', (u) => log('phone update offered:', u.name, u.from, '->', u.to));
+  phones.on('updateStatus', (u) => log('phone update:', u.name, u.state, u.detail));
   phones.on('warning', (w) => { warnings.push(w); pushStatus(); });
   phones.on('audio', ({ data }) => bluey.pushAudio(data, 'phone'));
   phones.on('command', onPhoneCommand);
@@ -540,7 +577,7 @@ Only allow it if the numbers match. A paired phone can ask Bluey to use this PC.
   dock = new FaceDock(settings);
   const updateDock = () => {
     // Only while he's awake (Ctrl+Alt+Space) and no phone is his face. Asleep, he stays out of the way.
-    if (settings.get('faceOnDesktop') && bluey.awake && !phones.connected && !process.env.BLUEY_QA) dock.show(); else dock.hide();
+    if (settings.get('faceOnDesktop') && bluey.awake && !process.env.BLUEY_QA) dock.show(); else dock.hide();
   };
   overlay.on('face', (face) => {
     phones.face(face);
@@ -550,8 +587,16 @@ Only allow it if the numbers match. A paired phone can ask Bluey to use this PC.
   });
 
   const port = await startToolServer();
+  // Source (unpackaged) runs only: let the project's own QA scripts drive the live app through the same local tool server.
+  if (DEV && !process.env.BLUEY_QA) { try { fs.writeFileSync(path.join(app.getPath('userData'), 'dev-control.json'), JSON.stringify({ port, secret }), { mode: 0o600 }); } catch {} }
   bluey = new Bluey({ settings, notes, whisper, host, overlay, phones, brainStatus: () => brainStatus, bridge: bridgeCommand(port),
     workDir: path.join(app.getPath('userData'), 'brain') });
+  host.learning = learning;
+  host.on('learningChanged', () => { phones.broadcast({ t: 'learningChanged' }); if (panel && !panel.isDestroyed()) panel.webContents.send('panel:learningChanged'); });
+  const recordTiming = t => { timings.push({ ...t, at: Date.now() }); if (timings.length > 100) timings.shift(); };
+  host.on('toolTiming', recordTiming);
+  bluey.on('timing', recordTiming);
+  phones.on('voiceStatus', m => bluey.speech.played(m));
   bluey.on('state', (st) => { pushStatus(); dock.setState(st); updateDock(); });
   const { AdbHands } = require('./adbhands');
   adbHands = new AdbHands({ adb: PATHS.adb, nativeImage });
@@ -595,6 +640,8 @@ Only allow it if the numbers match. A paired phone can ask Bluey to use this PC.
     }).catch((e) => { warnings.push('Speaker labels: ' + e.message); log('diarize failed', e.message); });
   });
   bluey.on('warning', (w) => { warnings.push(w); log('warning', w); pushStatus(); });
+  bluey.on('learned', (items) => log('learned:', items.map((i) => i.text).join(' | ')));
+  bluey.on('log', (m) => log(m));
   bluey.on('toast', (t) => { if (panel && !panel.isDestroyed()) panel.webContents.send('panel:toast', t); });
   bluey.on('caption', (c) => { if (panel && !panel.isDestroyed()) panel.webContents.send('panel:caption', c); });
   notes.on('entry', (e) => { if (panel && !panel.isDestroyed()) panel.webContents.send('panel:entry', e); phones.broadcast({ t: 'entry', ...e }); });

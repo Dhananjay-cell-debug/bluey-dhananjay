@@ -67,3 +67,19 @@ MIUI kills background services, which is why Bluey can suddenly "lose access" to
 
 - He speaks with a natural voice (Settings → "His voice"; press **Hear her**). Pick Ava, Emma, Jenny, Aria, Neerja (Indian English) or Swara (Hindi).
 - He chooses how hard to think for each question: "hi" is answered quickly by a small model; real tasks (using your phone, research, hard problems) get Opus at high effort. Switch this off in Settings → Brain → "Choose the model and effort automatically".
+
+## Phone companion and voice — version 1.2
+
+- Install the updated **Bluey.apk** from the laptop's Phone tab download page. It updates your existing app and keeps pairing.
+- With **Let Bluey use this phone** enabled in Accessibility, his little cursor stays with you across apps while a session is awake. He floats, blinks, thinks, trails sparkles as he flies, squishes on taps, and shows reply bubbles. Double tap his big face to end the session and hide the cursor.
+- Replies now play through the connected phone. If the online voice fails, Android's installed text-to-speech voice reads the reply. Without an updated phone connected, replies play on the laptop.
+- On the phone, the speaker button's slider (or **Voice & sounds** in settings) controls speech and chirps. Check Android's **media volume** too. Tap **Say hi** for a spoken greeting.
+- Hold his face, speak, then release to ask a question. Ordinary listening still collects notes without answering every background conversation.
+- Captions can disappear without cutting off his voice. Holding to ask again, sleeping, or disconnecting stops phone playback.
+
+## Version 1.4 — he updates himself, and he learns you
+
+- **Updates install themselves.** When you put a newer `Bluey.apk` on the laptop (it is served from the laptop's Phone tab), your phone is told over the encrypted link the next time it connects. It downloads the file from your laptop on your Wi-Fi, checks its SHA-256, and Android installs it over the old app. The very first time, Android asks you to "Allow from this source" for Bluey; after that it needs nothing from you. Pairing and settings are kept. (An app from before 1.4 can't do this yet, so install 1.4 by hand once.)
+- **He learns how you work.** After each session he quietly notes lasting things: how you like answers, corrections you gave, how you write prompts for Claude or ChatGPT, routines you repeat. You can see, edit and delete every one in the Panel → Learning tab (and on the phone under Learning), pause learning, or say "remember that I like…" at any time. He never saves passwords or codes, and what he remembers is context, not permission: he still only acts when you ask.
+- **He speaks as he works.** A short spoken cue starts as each action begins ("Opening WhatsApp.", "Tapping here."), and replies are spoken sentence by sentence while they are still being written, so the voice keeps pace with what is happening.
+- **See what he's thinking with:** the small badge at the edge of the desktop overlay shows which model he is using for the current step.

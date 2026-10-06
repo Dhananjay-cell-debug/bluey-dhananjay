@@ -36,13 +36,52 @@ class BlueyHands : AccessibilityService() {
     /** His cursor on the phone's screen while he works. */
     val cursor: PhoneCursor by lazy { PhoneCursor(this) }
 
-    override fun onServiceConnected() { instance = this }
+    override fun onServiceConnected() {
+        instance = this
+        val model = app.bluey.BlueyModel.get(this)
+        // Android rebinds this service after an app update; reconnect without needing another tap on Open.
+        model.start()
+        cursor.setSession(model.mode.value.name.lowercase())
+        model.link.send("caps", "hands" to true, "lite" to false, "voice" to true, "version" to app.bluey.BuildConfig.VERSION_NAME, "versionCode" to app.bluey.BuildConfig.VERSION_CODE)
+    }
     override fun onDestroy() { cursor.hideNow(); if (instance === this) instance = null; super.onDestroy() }
     override fun onUnbind(intent: Intent?): Boolean { cursor.hideNow(); if (instance === this) instance = null; return super.onUnbind(intent) }
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
+    @Volatile private var lastUiEvent = 0L
+    @Volatile private var lastConfirm = 0L
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        if (event != null && app.bluey.Updater.confirming() && event.packageName?.toString() in INSTALLERS) confirmOwnUpdate()
+        if (event != null && event.eventType in intArrayOf(AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
+            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED, AccessibilityEvent.TYPE_VIEW_SCROLLED,
+            AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED)) lastUiEvent = android.os.SystemClock.uptimeMillis()
+    }
+    /** Let the UI settle after a gesture without imposing a fixed delay on every action. */
+    fun awaitUiStable(tool: String) {
+        val opening = tool == "phone_open_app" || tool == "phone_open_url"
+        val start = android.os.SystemClock.uptimeMillis()
+        val minimum = if (opening) 180L else 60L
+        val maximum = if (opening) 650L else 260L
+        while (android.os.SystemClock.uptimeMillis() - start < maximum) {
+            Thread.sleep(20)
+            val now = android.os.SystemClock.uptimeMillis()
+            if (now - start >= minimum && now - lastUiEvent >= 60L) return
+        }
+    }
+    /** Presses Install / Update on Android's installer, only while Bluey is installing its own update (never a warning screen). */
+    private fun confirmOwnUpdate() {
+        val now = android.os.SystemClock.uptimeMillis()
+        if (now - lastConfirm < 350) return
+        lastConfirm = now
+        val root = windows.mapNotNull { it.root }.firstOrNull { it.packageName?.toString() in INSTALLERS } ?: return
+        if (root.findAccessibilityNodeInfosByText("Bluey").isEmpty()) return
+        val button = listOf("Install", "Update", "Done", "Next").firstNotNullOfOrNull { word ->
+            root.findAccessibilityNodeInfosByText(word).firstOrNull { it.isClickable && it.text?.toString()?.trim().equals(word, true) && it.isEnabled }
+        } ?: return
+        button.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+    }
     override fun onInterrupt() {}
 
     companion object {
+        private val INSTALLERS = setOf("com.google.android.packageinstaller", "com.android.packageinstaller", "com.miui.packageinstaller")
         @Volatile var instance: BlueyHands? = null
         val enabled get() = instance != null
 
@@ -117,7 +156,7 @@ class BlueyHands : AccessibilityService() {
         val latch = CountDownLatch(1)
         var result: String? = null
         runCatching {
-            takeScreenshot(Display.DEFAULT_DISPLAY, Executors.newSingleThreadExecutor(), object : TakeScreenshotCallback {
+            takeScreenshot(Display.DEFAULT_DISPLAY, mainExecutor, object : TakeScreenshotCallback {
                 override fun onSuccess(shot: ScreenshotResult) {
                     runCatching {
                         val hw = Bitmap.wrapHardwareBuffer(shot.hardwareBuffer, shot.colorSpace)

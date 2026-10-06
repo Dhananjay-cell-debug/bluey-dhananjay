@@ -85,19 +85,20 @@ import java.util.Date
 @Composable
 fun AppScreen(model: BlueyModel, onClose: () -> Unit) {
     val detail by model.detail.collectAsState()
-    BackHandler { if (detail != null) model.closeSession() else onClose() }
+    var learningPage by remember { mutableStateOf(false) }
+    BackHandler { if (learningPage) learningPage = false else if (detail != null) model.closeSession() else onClose() }
     LaunchedEffect(Unit) { model.refreshSessions() }
     Row(Modifier.fillMaxSize().background(Color.Black).clickable(enabled = false) {}) {
-        Sidebar(model, onClose, Modifier.width(300.dp).fillMaxHeight().background(Palette.panel.copy(alpha = 0.6f)))
+        Sidebar(model, onClose, { learningPage = !learningPage }, learningPage, Modifier.width(300.dp).fillMaxHeight().background(Palette.panel.copy(alpha = 0.6f)))
         Box(Modifier.weight(1f).fillMaxHeight()) {
             val d = detail
-            if (d == null) SessionList(model) else SessionView(model, d)
+            if (learningPage) LearningScreen(model) else if (d == null) SessionList(model) else SessionView(model, d)
         }
     }
 }
 
 @Composable
-private fun Sidebar(model: BlueyModel, onClose: () -> Unit, modifier: Modifier) {
+private fun Sidebar(model: BlueyModel, onClose: () -> Unit, onLearning: () -> Unit, learningPage: Boolean, modifier: Modifier) {
     val status by model.linkStatus.collectAsState()
     val pcName by model.link.pcName.collectAsState()
     val mode by model.mode.collectAsState()
@@ -149,7 +150,9 @@ private fun Sidebar(model: BlueyModel, onClose: () -> Unit, modifier: Modifier) 
         }
 
         HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
-        Label("Chirp volume")
+        Text(if (learningPage) "← Sessions" else "✦ Learning", color = Palette.berry1, fontFamily = Fonts.fredoka, fontSize = 18.sp,
+            modifier = Modifier.fillMaxWidth().clickable(onClick = onLearning).padding(vertical = 8.dp))
+        Label("Voice & sounds")
         Slider(value = volume, onValueChange = { model.setVolume(it) }, colors = SliderDefaults.colors(thumbColor = Palette.berry1, activeTrackColor = Palette.berry2))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Show his replies on the phone", color = Color.White, fontFamily = Fonts.plexSans, fontSize = 14.sp, modifier = Modifier.weight(1f))

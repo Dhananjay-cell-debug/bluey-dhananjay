@@ -35,10 +35,12 @@ const DEFAULTS = {
   captions: true,
   speakReplies: true,       // read his replies out loud (Windows voices, on this PC); the bubble still shows
   speakEngine: 'neural',    // neural (natural online voices, no key) | windows (this PC's own voices)
-  speakNeuralVoice: 'en-US-AvaMultilingualNeural',
+  speakNeuralVoice: 'en-US-AriaNeural',
   speakVoice: '',           // Windows voice name (only for the windows engine / as the fallback)
   faceOnDesktop: true,      // while he's awake with no phone connected, show his face at the bottom of the screen
+  learnAutomatically: true, // after each session, note lasting habits you showed (reviewable in the Learning tab)
   autoContinue: true,       // waking within 10 minutes of the last session carries on in it
+  learningEnabled: true,    // remember useful corrections and workflows; editable in the phone's Learning page
   autoLook: true,           // send a fresh look at the screen with every question (faster answers)
   notesFolder: '',          // empty = Documents/Bluey Notes
   devices: [],              // paired phones

@@ -97,6 +97,7 @@ fun BlueyRoot(model: BlueyModel, requestMic: () -> Unit) {
         if (status == LinkStatus.CONNECTED) playAlone = false
         TopButtons(model, onOpenApp = { showApp = true })
         Toast(model)
+        UpdateBanner(model)
         if (showApp) AppScreen(model, onClose = { showApp = false })
     }
 }
@@ -155,7 +156,27 @@ private fun FaceScreen(model: BlueyModel) {
             drawIntoCanvas { renderer.draw(it.nativeCanvas, f, size.width, size.height) }
         }
         ModeIndicator(mode)
+        ModelBadge(model)
         Caption(model)
+    }
+}
+
+@Composable
+private fun ModelBadge(model: BlueyModel) {
+    val status by model.pcStatus.collectAsState()
+    val mode by model.mode.collectAsState()
+    val route = status?.optJSONObject("route")
+    val name = route?.optString("model")?.takeIf { it.isNotBlank() && it != "null" }
+    val brain = route?.optString("brain") ?: status?.optString("brain")
+    val label = if (name == null) "Ready" else if (brain == "local") name else "${if (brain == "claude") "Claude" else "Codex"} · $name"
+    if (mode != Mode.ASLEEP) Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.BottomEnd) {
+        Row(Modifier.clip(RoundedCornerShape(14.dp)).background(Color(0xE61E1B29))
+            .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(14.dp)).padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(6.dp).clip(CircleShape).background(Palette.berry1))
+            Spacer(Modifier.width(8.dp))
+            Text(label, color = Palette.inkSoft, fontFamily = Fonts.plexMono, fontSize = 11.sp)
+        }
     }
 }
 
@@ -271,7 +292,7 @@ private fun SoundPanel(model: BlueyModel, touched: () -> Unit) {
             colors = SliderDefaults.colors(thumbColor = Palette.berry1, activeTrackColor = Palette.berry2))
         val connected = status == LinkStatus.CONNECTED
         Box(Modifier.fillMaxWidth().height(44.dp).clip(RoundedCornerShape(12.dp)).background(Palette.brush).alpha(if (connected) 1f else 0.4f)
-            .clickable(enabled = connected) { model.sayHi(); model.chirp.play(3); touched() }, contentAlignment = Alignment.Center) {
+            .clickable(enabled = connected) { model.sayHi(); touched() }, contentAlignment = Alignment.Center) {
             Text(if (mode == Mode.ASLEEP) "Wake him up" else "Say hi", color = Color.White, fontFamily = Fonts.plexSans, fontSize = 15.sp)
         }
         if (found.size > 1) {
@@ -284,6 +305,29 @@ private fun SoundPanel(model: BlueyModel, touched: () -> Unit) {
             }
         }
         if (!connected) Text("Connect to your PC to talk to him.", color = Palette.inkSoft, fontFamily = Fonts.plexSans, fontSize = 12.sp)
+    }
+}
+
+/** "A new Bluey is ready": appears when the PC has a newer app, with Android's one-time OK if it is needed. */
+@Composable
+private fun UpdateBanner(model: BlueyModel) {
+    val status by model.updater.status.collectAsState()
+    val needs by model.updater.needsPermission.collectAsState()
+    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+    androidx.compose.runtime.DisposableEffect(lifecycle) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, e -> if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME) model.updater.resume() }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer) }
+    }
+    Box(Modifier.fillMaxSize().padding(top = 18.dp), contentAlignment = Alignment.TopCenter) {
+        AnimatedVisibility(status != null, enter = fadeIn(), exit = fadeOut()) {
+            Row(verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.widthIn(max = 560.dp).clip(RoundedCornerShape(14.dp)).background(Palette.panel)
+                    .border(1.dp, Palette.berry2, RoundedCornerShape(14.dp)).padding(horizontal = 16.dp, vertical = 10.dp)) {
+                Text(status ?: "", color = Color.White, fontFamily = Fonts.plexSans, fontSize = 14.sp, modifier = Modifier.weight(1f, false))
+                if (needs) Text("  Allow", color = Palette.berry2, fontFamily = Fonts.plexSans, fontSize = 14.sp, modifier = Modifier.clickable { model.updater.openPermission() }.padding(8.dp))
+            }
+        }
     }
 }
 

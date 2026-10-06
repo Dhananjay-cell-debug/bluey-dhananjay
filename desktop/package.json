@@ -1,7 +1,7 @@
 {
   "name": "bluey-desktop",
   "productName": "Bluey",
-  "version": "1.0.0",
+  "version": "1.4.0",
   "description": "A blueberry who lives under your screen, points at things with his own cursor, and runs on your Claude or ChatGPT subscription.",
   "main": "src/main/main.js",
   "author": "Bluey",

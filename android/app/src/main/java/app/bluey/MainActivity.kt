@@ -66,7 +66,7 @@ class MainActivity : ComponentActivity() {
     override fun onStop() {
         super.onStop()
         // Keep the link while a session runs (the mic keeps going in the background); otherwise rest.
-        if (model.mode.value == Mode.ASLEEP && !isChangingConfigurations) model.stop()
+        if (model.mode.value == Mode.ASLEEP && !isChangingConfigurations && !app.bluey.hands.BlueyHands.enabled) model.stop()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {

@@ -92,4 +92,4 @@ async function research(question, { context, brain, workDir, speed }) {
   }
 }
 
-module.exports = { research, parseReport };
+module.exports = { research, parseReport, runCapture };

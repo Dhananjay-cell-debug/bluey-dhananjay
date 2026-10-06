@@ -147,8 +147,8 @@
   function draw(c, f, width, height, { background = '#000' } = {}) {
     c.save();
     if (background) { c.fillStyle = background; c.fillRect(0, 0, width, height); } else c.clearRect(0, 0, width, height);
-    const scale = Math.max(width / DESIGN.width, height / DESIGN.height);
-    c.translate((width - DESIGN.width * scale) / 2, height - DESIGN.height * scale);
+    const scale = Math.min(width / (DESIGN.width + 80), height / (DESIGN.height + 36));
+    c.translate((width - DESIGN.width * scale) / 2, height - (DESIGN.height + 14) * scale);
     c.scale(scale, scale);
 
     // Whole-body motion: breathing, talking bounce, idle hops, and leaning toward what he looks at.

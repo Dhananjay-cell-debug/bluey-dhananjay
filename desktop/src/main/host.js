@@ -43,7 +43,12 @@ class Host extends EventEmitter {
 
   /** Runs a tool after any earlier ones finish. Returns MCP content. */
   run(name, args) {
-    const next = this.chain.then(() => this.runNow(name, args || {})).catch((e) => ({ text: 'That went wrong: ' + e.message }));
+    const next = this.chain.then(async () => {
+      const start = Date.now();
+      const result = await this.runNow(name, args || {});
+      this.emit('toolTiming', { name, ms: Date.now() - start });
+      return result;
+    }).catch((e) => ({ text: 'That went wrong: ' + e.message, error: true }));
     this.chain = next.catch(() => {});
     return next.then((r) => {
       const content = [{ type: 'text', text: r.text }];
@@ -58,6 +63,7 @@ class Host extends EventEmitter {
       if (!this.settings.get('phoneControl')) return { text: 'The user has turned off phone control.' };
       if (name !== 'phone_look' && name !== 'phone_apps' && Date.now() < this.stoppedUntil) return { text: "The user pressed stop. Don't do anything else until they ask again." };
       if (!this.phoneBridge) return { text: "Your phone isn't connected to Bluey right now." };
+      await this.beforeAction?.(name, args);
       this.overlay.send('overlay:bubble', { text: name === 'phone_look' ? '📱 looking' : '📱 ' + name.replace('phone_', '') });
       const r = await this.phoneBridge(name, args);
       return { text: r.text || 'Done.', image: r.image };
@@ -65,9 +71,18 @@ class Host extends EventEmitter {
     if (toolDefs.actionNames.has(name)) {
       const refusal = this.actionRefusal();
       if (refusal) return { text: refusal };
+      await this.beforeAction?.(name, args);
       return this.action(name, args);
     }
     switch (name) {
+      case 'learn_memory': {
+        if (!this.learning?.enabled) return { text: 'Learning is paused. Do not save new memories.' };
+        try {
+          const item = this.learning.put({ ...args, source: 'Learned from a session' });
+          this.emit('learningChanged'); return { text: `Remembered: ${item.text}` };
+        } catch (e) { return { text: e.message, error: true }; }
+      }
+      case 'read_learning': return { text: JSON.stringify(this.learning?.list() || { enabled: false, items: [] }) };
       case 'look_at_screen': return this.look();
       case 'point_at': {
         const id = String(args.target_id || '').trim();
@@ -219,10 +234,10 @@ The user's mouse pointer is at @${mx},${my}`;
           const right = !!args.right, count = args.double ? 2 : 1;
           await this.fly(t.point);
           this.overlay.send('overlay:click', { x: t.point.x, y: t.point.y, right });
-          await sleep(90);  // the click lands at the bottom of the squish
+          await sleep(35);  // the click lands with the squish
           const p = this.physical(t.point);
           await this.native.call('click', { x: p.x, y: p.y, button: right ? 'right' : 'left', count, restore: true });
-          await sleep(260);
+          await sleep(100);
           const verb = right ? 'Right-clicked' : count === 2 ? 'Double-clicked' : 'Clicked';
           return this.lookQuick(`${verb} ${t.name === 'that spot' ? 'there' : `"${t.name}"`}.`);
         }
@@ -239,12 +254,11 @@ The user's mouse pointer is at @${mx},${my}`;
             else if (this.overlay.isHome) this.overlay.setMode({ kind: 'docked' });
           } else if (this.overlay.isHome) this.overlay.setMode({ kind: 'docked' });
           // Type in little bursts so you can watch the letters float up.
-          const chunks = text.match(/[\s\S]{1,3}/g) || [];
+          const chunks = text.match(/[\s\S]{1,24}/g) || [];
           for (const chunk of chunks) {
             if (Date.now() < this.stoppedUntil) return { text: 'Stopped by the user.' };
             this.overlay.send('overlay:typed', chunk);
-            await this.native.call('type', { text: chunk, delay: 6 });
-            await sleep(22);
+            await this.native.call('type', { text: chunk, delay: 1 });
           }
           if (args.press_enter || args.press_return) {
             await sleep(120);
@@ -318,7 +332,7 @@ The user's mouse pointer is at @${mx},${my}`;
           if (this.overlay.isHome) this.overlay.setMode({ kind: 'docked' });
           this.overlay.send('overlay:bubble', { text: 'Opening ' + name });
           const r = await this.native.call('openApp', { name }, 20000);
-          await sleep(900);
+          await sleep(250);
           return this.lookQuick(r.text);
         }
         case 'list_windows': {
@@ -338,7 +352,7 @@ The user's mouse pointer is at @${mx},${my}`;
           if (this.overlay.isHome) this.overlay.setMode({ kind: 'docked' });
           this.overlay.send('overlay:bubble', { text: '⇆ ' + name });
           const r = await this.native.call('switchTo', { name, kind: args.kind || 'any' }, 20000);
-          await sleep(500);
+          await sleep(160);
           return this.lookQuick(r.text);
         }
         case 'open_url': {
@@ -351,7 +365,7 @@ The user's mouse pointer is at @${mx},${my}`;
           if (this.overlay.isHome) this.overlay.setMode({ kind: 'docked' });
           this.overlay.send('overlay:bubble', { text: parsed.hostname.replace(/^www\./, '') });
           await shell.openExternal(parsed.toString());
-          await sleep(1500);
+          await sleep(350);
           return this.lookQuick(`Opened ${parsed.hostname}.`);
         }
         default:
@@ -387,7 +401,7 @@ The user's mouse pointer is at @${mx},${my}`;
 
   /** Flies the cursor to a spot and waits until it has landed. */
   async fly(point) {
-    this.overlay.setMode({ kind: 'pinned', x: point.x, y: point.y });
+    this.overlay.setMode({ kind: 'pinned', x: point.x, y: point.y, fast: true });
     await sleep(70);  // the next frame plans the trip
     const until = Date.now() + 1800;
     while (Date.now() < until) {

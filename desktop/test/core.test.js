@@ -222,9 +222,9 @@ test('the question message carries overheard context, the question and the fresh
 });
 
 test('tool list switches with computer control and every tool has a schema', () => {
-  assert.equal(tools.list(false).length, 6);
-  assert.equal(tools.list(true, true).length, 24);
-  assert.equal(tools.list(true).length, 15);
+  assert.equal(tools.list(false).length, 8);
+  assert.equal(tools.list(true, true).length, 26);
+  assert.equal(tools.list(true).length, 17);
   for (const t of tools.list(true)) {
     assert.equal(t.inputSchema.type, 'object');
     assert.ok(t.description.length > 20);

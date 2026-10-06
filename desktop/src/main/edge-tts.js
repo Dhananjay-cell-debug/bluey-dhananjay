@@ -12,6 +12,7 @@ const ORIGIN = 'chrome-extension://jdiccldimpdaibmpdkjnbmckianbfold';
 const WIN_EPOCH = 11644473600;
 
 let clockSkew = 0;  // seconds; corrected from the server's Date header if the PC's clock is off
+const cache = new Map();
 
 /** The time-based token Microsoft's endpoint checks (SHA-256 of a 5-minute-rounded Windows timestamp + the client token). */
 function secMsGec(nowMs = Date.now()) {
@@ -25,7 +26,7 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&
 const uuid = () => crypto.randomUUID().replace(/-/g, '');
 
 /** Speaks `text` with a neural voice; resolves with an MP3 (24 kHz) Buffer. rate like '+10%'. */
-function synth(text, { voice = 'en-US-AvaMultilingualNeural', rate = '+8%', pitch = '+0Hz', timeout = 15000 } = {}) {
+function synthUncached(text, { voice = 'en-US-AvaMultilingualNeural', rate = '+4%', pitch = '+0Hz', timeout = 15000 } = {}) {
   return new Promise((resolve, reject) => {
     const url = `wss://speech.platform.bing.com/consumer/speech/synthesize/readaloud/edge/v1?TrustedClientToken=${TOKEN}`
       + `&ConnectionId=${uuid()}&Sec-MS-GEC=${secMsGec()}&Sec-MS-GEC-Version=1-${CHROME_VERSION}`;
@@ -40,6 +41,7 @@ function synth(text, { voice = 'en-US-AvaMultilingualNeural', rate = '+8%', pitc
       reject(new Error('speech service said ' + res.statusCode));
     });
     ws.on('error', (e) => { clearTimeout(timer); reject(e); });
+    ws.on('close', () => { clearTimeout(timer); reject(new Error('speech connection closed before audio completed')); });
     ws.on('open', () => {
       ws.send(`X-Timestamp:${stamp()}\r\nContent-Type:application/json; charset=utf-8\r\nPath:speech.config\r\n\r\n`
         + JSON.stringify({ context: { synthesis: { audio: { metadataoptions: { sentenceBoundaryEnabled: 'false', wordBoundaryEnabled: 'false' }, outputFormat: 'audio-24khz-48kbitrate-mono-mp3' } } } }));
@@ -48,7 +50,9 @@ function synth(text, { voice = 'en-US-AvaMultilingualNeural', rate = '+8%', pitc
     });
     ws.on('message', (data, isBinary) => {
       if (isBinary) {
+        if (data.length < 2) return;
         const headerLen = data.readUInt16BE(0);
+        if (headerLen + 2 > data.length) return;
         const header = data.subarray(2, 2 + headerLen).toString('utf8');
         if (/Path:audio/.test(header)) chunks.push(data.subarray(2 + headerLen));
       } else if (/Path:turn\.end/.test(data.toString())) {
@@ -61,12 +65,21 @@ function synth(text, { voice = 'en-US-AvaMultilingualNeural', rate = '+8%', pitc
   });
 }
 
+async function synth(text, options = {}) {
+  const key = JSON.stringify([text, options.voice || 'en-US-AvaMultilingualNeural', options.rate || '+4%', options.pitch || '+0Hz']);
+  if (cache.has(key)) return cache.get(key);
+  const audio = await synthUncached(text, options);
+  if (cache.size >= 48) cache.delete(cache.keys().next().value);
+  cache.set(key, audio);
+  return audio;
+}
+
 /** Voices worth offering: natural female voices first. */
 const VOICES = [
-  { id: 'en-US-AvaMultilingualNeural', name: 'Ava — warm and natural (recommended)', lang: 'en-US' },
+  { id: 'en-US-AvaMultilingualNeural', name: 'Ava — warm and natural', lang: 'en-US' },
   { id: 'en-US-EmmaMultilingualNeural', name: 'Emma — soft and friendly', lang: 'en-US' },
   { id: 'en-US-JennyNeural', name: 'Jenny — friendly', lang: 'en-US' },
-  { id: 'en-US-AriaNeural', name: 'Aria — expressive', lang: 'en-US' },
+  { id: 'en-US-AriaNeural', name: 'Aria — expressive, the closest to a ChatGPT-style voice (default)', lang: 'en-US' },
   { id: 'en-IN-NeerjaExpressiveNeural', name: 'Neerja — Indian English, expressive', lang: 'en-IN' },
   { id: 'en-IN-NeerjaNeural', name: 'Neerja — Indian English', lang: 'en-IN' },
   { id: 'hi-IN-SwaraNeural', name: 'Swara — Hindi', lang: 'hi-IN' },

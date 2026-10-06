@@ -13,6 +13,9 @@ import android.graphics.Shader
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.text.Layout
+import android.text.StaticLayout
+import android.text.TextPaint
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
@@ -39,7 +42,11 @@ class PhoneCursor(private val service: AccessibilityService) {
     private val main = Handler(Looper.getMainLooper())
     private val wm = service.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private var view: CursorView? = null
-    private val fadeOut = Runnable { view?.fade(false); main.postDelayed({ remove() }, 500) }
+    private var awake = false
+    private val removeLater = Runnable { if (!awake) remove() }
+    private val fadeOut = Runnable {
+        if (awake) view?.goHome() else { view?.fade(false); main.postDelayed(removeLater, 500) }
+    }
 
     private fun ensure(): CursorView {
         view?.let { return it }
@@ -51,7 +58,8 @@ class PhoneCursor(private val service: AccessibilityService) {
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT,
         ).apply { gravity = Gravity.TOP or Gravity.START }
-        runCatching { wm.addView(v, lp); view = v }
+        wm.addView(v, lp)
+        view = v
         return v
     }
 
@@ -62,11 +70,31 @@ class PhoneCursor(private val service: AccessibilityService) {
 
     private fun touch() {
         main.removeCallbacks(fadeOut)
+        main.removeCallbacks(removeLater)
+        view?.fade(true)
         main.postDelayed(fadeOut, 3500)
     }
 
+    /** A companion for the whole conversation, including when other apps are in front. */
+    fun setSession(state: String) { main.post {
+        awake = state != "asleep"
+        main.removeCallbacks(fadeOut)
+        main.removeCallbacks(removeLater)
+        if (!awake) { view?.fade(false); main.postDelayed(removeLater, 500) }
+        else runCatching {
+            val v = ensure()
+            v.mood = state
+            v.fade(true)
+            v.post { if (v.isAtHome) v.goHome() }
+            if (!v.isAtHome) main.postDelayed(fadeOut, 3500)
+        }
+    } }
+
+    fun setTalking(on: Boolean) { main.post { view?.talking = on; view?.invalidate() } }
+    fun caption(text: String) { main.post { view?.setCaption(text) } }
+
     /** Flies the cursor to a point and waits until it lands (so the tap that follows happens where you're looking). */
-    fun fly(x: Float, y: Float, ms: Long = 460) {
+    fun fly(x: Float, y: Float, ms: Long = 170) {
         val latch = CountDownLatch(1)
         main.post {
             runCatching {
@@ -84,13 +112,12 @@ class PhoneCursor(private val service: AccessibilityService) {
     fun label(text: String) { main.post { runCatching { ensure().showLabel(text); touch() } } }
 
     /** A swipe: the cursor goes to the start, then drags to the end. */
-    fun swipe(x1: Float, y1: Float, x2: Float, y2: Float, ms: Long = 380) {
-        fly(x1, y1, 380)
-        main.post { runCatching { ensure().press() } }
-        fly(x2, y2, ms)
+    fun swipe(x1: Float, y1: Float, x2: Float, y2: Float, ms: Long = 280) {
+        fly(x1, y1, 130)
+        main.post { runCatching { ensure().press(); ensure().flyTo(x2, y2, ms) {} } }
     }
 
-    fun hideNow() { main.removeCallbacks(fadeOut); main.post { remove() } }
+    fun hideNow() { main.post { awake = false; main.removeCallbacks(fadeOut); main.removeCallbacks(removeLater); remove() } }
 }
 
 private class CursorView(context: Context) : View(context) {
@@ -120,10 +147,42 @@ private class CursorView(context: Context) : View(context) {
     private val body = Path()
     private val tmp = RectF()
     private val rnd = Random(7)
+    var mood = "listening"
+    var talking = false
+    var isAtHome = true
+        private set
+    private val trail = ArrayList<Pair<Float, Float>>()
+    private val replyPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE; textSize = 15f * dp
+        typeface = resources.getFont(app.bluey.R.font.plex_sans)
+    }
+    private var reply = ""
+    private var replyLayout: StaticLayout? = null
+    private var replyBorn = 0L
+
+    fun setCaption(value: String) {
+        reply = value
+        replyLayout = null
+        replyBorn = SystemClock.uptimeMillis()
+        invalidate()
+    }
+
+    fun goHome() {
+        if (width == 0 || height == 0) return
+        flyTo(22f * dp, height - size - 100f * dp, 700) {}
+        isAtHome = true
+    }
+
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        replyLayout = null
+        if (isAtHome) goHome()
+    }
 
     fun fade(on: Boolean) { wantOpacity = if (on) 1f else 0f; invalidate() }
 
     fun flyTo(x: Float, y: Float, ms: Long, done: () -> Unit) {
+        onArrive?.invoke()
+        isAtHome = false
         if (tx < -500f) { tx = x - 120f * dp; ty = y + 160f * dp }  // first time: come in from below-left
         sx = tx; sy = ty; ex = x; ey = y
         t0 = SystemClock.uptimeMillis(); dur = max(ms, 1)
@@ -137,10 +196,11 @@ private class CursorView(context: Context) : View(context) {
         val now = SystemClock.uptimeMillis()
         pressStart = now; pressDepth = if (long) 0.16f else 0.14f
         effects.add(Fx(0, x, y, now, 650, 0f, 0f, null, Palette.BERRY2, 0f))
-        for (i in 0 until 6) {
-            val a = i / 6f * 2f * PI.toFloat() + rnd.nextFloat() * 0.5f - 0.25f
-            val d = (34f + rnd.nextFloat() * 24f) * dp
-            effects.add(Fx(1, x, y, now, 560, cos(a) * d, sin(a) * d, null, intArrayOf(Palette.BERRY1, Palette.BERRY2, Palette.BERRY3)[rnd.nextInt(3)], rnd.nextFloat() * 5f - 2.5f))
+        effects.add(Fx(0, x, y, now + 80, 780, 0f, 0f, null, Palette.BERRY3, 0f))
+        for (i in 0 until 12) {
+            val a = i / 12f * 2f * PI.toFloat() + rnd.nextFloat() * 0.5f - 0.25f
+            val d = (38f + rnd.nextFloat() * 40f) * dp
+            effects.add(Fx(if (i % 2 == 0) 1 else 3, x, y, now, 740, cos(a) * d, sin(a) * d, null, intArrayOf(Palette.BERRY1, Palette.BERRY2, Palette.BERRY3, Color.WHITE)[rnd.nextInt(4)], rnd.nextFloat() * 5f - 2.5f))
         }
         invalidate()
     }
@@ -167,6 +227,8 @@ private class CursorView(context: Context) : View(context) {
         val now = SystemClock.uptimeMillis()
         // Position along a gently bowed curve, with the same easing as the laptop cursor.
         if (flying) {
+            trail.add(Pair(tx + size * 0.45f, ty + size * 0.45f))
+            if (trail.size > 18) trail.removeAt(0)
             val p = min(1f, (now - t0).toFloat() / dur)
             val e = ease.getInterpolation(p)
             val dx = ex - sx; val dy = ey - sy
@@ -183,6 +245,15 @@ private class CursorView(context: Context) : View(context) {
         }
         opacity += (wantOpacity - opacity) * 0.22f
 
+        // A little comet tail follows his flight and melts away after landing.
+        if (!flying && trail.isNotEmpty()) trail.removeAt(0)
+        trail.forEachIndexed { i, point ->
+            val p = (i + 1f) / trail.size
+            fill.shader = null
+            fill.color = Palette.withAlpha(Palette.BERRY2, p * 0.28f * opacity)
+            c.drawCircle(point.first, point.second, (2f + p * 9f) * dp, fill)
+        }
+
         // Soft ring and stars.
         val it = effects.iterator()
         while (it.hasNext()) {
@@ -192,6 +263,8 @@ private class CursorView(context: Context) : View(context) {
             if (t < 0f) continue
             val a = (1 - t)
             when (f.kind) {
+                3 -> { val e = 1 - (1 - t) * (1 - t); fill.color = Palette.withAlpha(f.color, a * opacity)
+                    c.drawCircle(f.x + f.dx * e, f.y + f.dy * e + 24f * dp * t * t, (2.5f + 1.5f * (1-t)) * dp, fill) }
                 0 -> { stroke.color = Palette.withAlpha(f.color, 0.8f * a * opacity); stroke.strokeWidth = 3.5f * dp
                     c.drawCircle(f.x, f.y, (38f * dp) * (0.3f + 0.7f * (1 - (1 - t) * (1 - t))), stroke) }
                 1 -> { val e = 1 - (1 - t) * (1 - t); fill.color = Palette.withAlpha(f.color, a.coerceIn(0f, 1f))
@@ -206,6 +279,7 @@ private class CursorView(context: Context) : View(context) {
 
         if (opacity > 0.02f) drawCursor(c, now)
         drawLabel(c, now)
+        drawReply(c, now)
         if (flying || effects.isNotEmpty() || opacity > 0.02f || label != null) postInvalidateOnAnimation()
     }
 
@@ -228,9 +302,10 @@ private class CursorView(context: Context) : View(context) {
             if (t < 0.12f) 1f - pressDepth * sin(t / 0.12f * PI.toFloat() / 2) else { val r = (t - 0.12f) / 0.3f; 1f - pressDepth * cos(r * PI.toFloat() * 1.5f) * exp(-r * 3.2f) }
         } else 1f
         c.save()
-        c.translate(tx, ty)
-        c.rotate(0f)
-        c.scale(squish, squish)
+        val bob = if (isAtHome && !flying) sin(now / 850.0).toFloat() * 3f * dp else 0f
+        c.translate(tx, ty + bob)
+        c.rotate(if (isAtHome && !flying) sin(now / 1300.0).toFloat() * 3f else (vx * 0.25f).coerceIn(-9f, 9f))
+        c.scale(2f - squish, squish)
         teardrop(s)
         // A soft shadow, then the blueberry gradient, a shine and the white rim.
         fill.shader = null; fill.color = Palette.withAlpha(Palette.BERRY4, 0.28f * opacity)
@@ -253,10 +328,54 @@ private class CursorView(context: Context) : View(context) {
             val cx = (34f + i * 24f) * k + d / 2; val cy = 40f * k + d / 2
             c.save(); c.translate(cx, cy); c.scale(1f, if (blink) 0.12f else 1f)
             fill.color = Palette.withAlpha(Color.WHITE, opacity); c.drawCircle(0f, 0f, d / 2, fill)
-            fill.color = Palette.withAlpha(Palette.INK, opacity); c.drawCircle(lx * 3.4f * k, ly * 3.4f * k, 4.5f * k, fill)
+            fill.color = Palette.withAlpha(Palette.INK, opacity)
+            val lookX = if (mood == "thinking") sin(now / 700.0).toFloat() else lx
+            c.drawCircle(lookX * 3.4f * k, (if (mood == "thinking") -1f else ly) * 3.4f * k, 4.5f * k, fill)
             c.restore()
         }
+        // Rosy cheeks and a mouth that moves while his real reply is playing.
+        fill.color = Palette.withAlpha(Palette.BERRY1, opacity * 0.65f)
+        c.drawOval(25f * k, 59f * k, 37f * k, 65f * k, fill)
+        c.drawOval(65f * k, 59f * k, 77f * k, 65f * k, fill)
+        stroke.color = Palette.withAlpha(Palette.INK, opacity); stroke.strokeWidth = 2.5f * k
+        if (talking) {
+            fill.color = Palette.withAlpha(Palette.INK, opacity)
+            val opening = (4f + kotlin.math.abs(sin(now / 85.0)).toFloat() * 7f) * k
+            c.drawOval(44f * k, 65f * k, 57f * k, 65f * k + opening, fill)
+        } else {
+            tmp.set(43f * k, 60f * k, 59f * k, 72f * k)
+            c.drawArc(tmp, 10f, 160f, false, stroke)
+        }
+        if (mood == "thinking" || mood == "asking") {
+            for (i in 0 until 3) {
+                fill.color = Palette.withAlpha(Color.WHITE, opacity * (0.45f + 0.45f * sin(now / 220.0 - i).toFloat()))
+                c.drawCircle((34f + i * 14f) * k, -10f * k, 3f * k, fill)
+            }
+        }
         c.restore()
+    }
+
+    private fun drawReply(c: Canvas, now: Long) {
+        if (reply.isBlank() || opacity < 0.02f || width < 1) return
+        val pad = 14f * dp
+        val maxWidth = min(270f * dp, width - 48f * dp).toInt().coerceAtLeast(1)
+        val layout = replyLayout ?: StaticLayout.Builder.obtain(reply, 0, reply.length, replyPaint, maxWidth)
+            .setAlignment(Layout.Alignment.ALIGN_NORMAL).setIncludePad(false).setMaxLines(5)
+            .setEllipsize(android.text.TextUtils.TruncateAt.END).build().also { replyLayout = it }
+        val w = layout.width + pad * 2
+        val h = layout.height + pad * 2
+        val x = (tx + size * 0.5f - w * 0.25f).coerceIn(12f * dp, max(12f * dp, width - w - 12f * dp))
+        val above = ty - h - 18f * dp
+        val y = (if (above > 28f * dp) above else ty + size + 16f * dp)
+            .coerceIn(24f * dp, max(24f * dp, height - h - 24f * dp))
+        val a = min(1f, (now - replyBorn) / 180f) * opacity
+        fill.shader = null; fill.color = Palette.withAlpha(Palette.INK, 0.96f * a)
+        tmp.set(x, y, x + w, y + h)
+        c.drawRoundRect(tmp, 18f * dp, 18f * dp, fill)
+        stroke.color = Palette.withAlpha(Palette.BERRY2, 0.8f * a); stroke.strokeWidth = 1.4f * dp
+        c.drawRoundRect(tmp, 18f * dp, 18f * dp, stroke)
+        replyPaint.alpha = (255 * a).toInt()
+        c.save(); c.translate(x + pad, y + pad); layout.draw(c); c.restore()
     }
 
     private fun drawLabel(c: Canvas, now: Long) {

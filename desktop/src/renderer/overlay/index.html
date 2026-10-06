@@ -7,6 +7,7 @@
 <style>
   html, body { margin: 0; padding: 0; background: transparent; overflow: hidden; width: 100%; height: 100%; }
   canvas { display: block; }
+  #model-badge { position: fixed; right: 24px; bottom: 24px; padding: 8px 12px; border: 1px solid rgba(169,188,255,.2); border-radius: 14px; background: rgba(30,27,41,.9); color: #B9B2CC; font: 11px 'IBM Plex Mono', monospace; box-shadow: 0 5px 24px rgba(0,0,0,.2); }
   /* Preload the display font so the first bubble measures right. */
   .preload { font-family: Fredoka; font-weight: 700; position: absolute; opacity: 0; pointer-events: none; }
 </style>
@@ -14,6 +15,7 @@
 <body>
 <canvas id="c"></canvas>
 <span class="preload">Bluey</span>
+<div id="model-badge" hidden></div>
 <script src="../common/palette.js"></script>
 <script src="../common/engine.js"></script>
 <script src="../common/chirp.js"></script>

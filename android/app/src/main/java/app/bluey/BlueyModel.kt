@@ -7,6 +7,7 @@ import android.os.SystemClock
 import app.bluey.audio.Chirp
 import app.bluey.audio.ListeningService
 import app.bluey.audio.Mic
+import app.bluey.audio.ReplyVoice
 import app.bluey.face.FaceAnimator
 import app.bluey.face.FaceState
 import app.bluey.hands.BlueyHands
@@ -32,9 +33,15 @@ class BlueyModel private constructor(private val context: Context) {
     private val prefs = context.getSharedPreferences("bluey", Context.MODE_PRIVATE)
     private val main = Handler(Looper.getMainLooper())
     val link = PcLink(context)
+    val updater = Updater(context, link)
     val animator = FaceAnimator()
     val chirp = Chirp()
-    private val mic = Mic { bytes, n -> if (micWanted || holding) link.sendAudio(bytes, n) }
+    val voice = ReplyVoice(context, { speaking, id ->
+        link.send("voiceStatus", "playing" to speaking, "id" to id)
+        animator.localMood = if (speaking) "talking" else if (_mode.value == Mode.THINKING) "thinking" else null
+        BlueyHands.instance?.cursor?.setTalking(speaking)
+    }, { showToast(it); link.send("voiceStatus", "playing" to false, "error" to it) })
+    private val mic = Mic { bytes, n -> if ((micWanted || holding) && !voice.speaking) link.sendAudio(bytes, n) }
 
     private val _mode = MutableStateFlow(Mode.ASLEEP)
     val mode: StateFlow<Mode> = _mode
@@ -56,6 +63,7 @@ class BlueyModel private constructor(private val context: Context) {
     val needsMicPermission: StateFlow<Boolean> = _needsMicPermission
     private val _pcStatus = MutableStateFlow<JSONObject?>(null)
     val pcStatus: StateFlow<JSONObject?> = _pcStatus
+    val learning = MutableStateFlow(JSONObject().put("enabled", true).put("items", JSONArray()))
 
     private var micWanted = false
     @Volatile var holding = false
@@ -65,11 +73,14 @@ class BlueyModel private constructor(private val context: Context) {
 
     init {
         chirp.volume = _volume.value
-        animator.localTalk = { chirp.level() }
+        voice.volume = _volume.value
+        voice.warm()
+        animator.localTalk = { if (voice.speaking) 0.35 + 0.35 * kotlin.math.abs(kotlin.math.sin(now() * 13)) else chirp.level() }
         link.onMessage = { handle(it) }
         link.onConnected = {
             link.send("status")
-            link.send("caps", "hands" to BlueyHands.enabled, "lite" to !app.bluey.BuildConfig.HANDS)
+            link.send("caps", "hands" to BlueyHands.enabled, "lite" to !app.bluey.BuildConfig.HANDS, "voice" to true, "version" to app.bluey.BuildConfig.VERSION_NAME, "versionCode" to app.bluey.BuildConfig.VERSION_CODE)
+            updater.connected()
             refreshSessions()
         }
         link.onDisconnected = {
@@ -82,7 +93,7 @@ class BlueyModel private constructor(private val context: Context) {
     }
 
     fun start() = link.start()
-    fun stop() = link.stop()
+    fun stop() { voice.stop(); BlueyHands.instance?.cursor?.hideNow(); link.stop() }
 
     private fun now() = SystemClock.uptimeMillis() / 1000.0
 
@@ -95,11 +106,17 @@ class BlueyModel private constructor(private val context: Context) {
             })
             "mic" -> if (m.optBoolean("on")) { micWanted = true; startMic() } else { micWanted = false; if (!holding) stopMic() }
             "chirp" -> chirp.play(m.optInt("syllables", 3))
-            "caption" -> _caption.value = m.optString("text", "")
+            "caption" -> {
+                _caption.value = m.optString("text", "")
+                BlueyHands.instance?.cursor?.caption(if (_showReplies.value) _caption.value else "")
+            }
+            "voice" -> if (m.optBoolean("stop")) voice.stop() else voice.play(m.optString("text"), m.optString("base64").takeIf { it.isNotEmpty() }, m.optString("id"))
             "heard" -> if (m.optBoolean("asked")) _heard.value = m.optString("text", "")
             "toast" -> showToast(m.optString("text"))
             "talkTest" -> animator.talkUntil = now() + m.optDouble("seconds", 3.0)
             "status" -> _pcStatus.value = m
+            "learningChanged" -> refreshLearning()
+            "update" -> updater.offered(m)
             "phoneCmd" -> phoneCommand(m)
             "sessionsChanged" -> { refreshSessions(); _detail.value?.let { if (it.started > 0) openSession(it.id) } }
             "entry" -> {
@@ -114,6 +131,8 @@ class BlueyModel private constructor(private val context: Context) {
 
     private fun setMode(mode: Mode) {
         _mode.value = mode
+        BlueyHands.instance?.cursor?.setSession(mode.name.lowercase())
+        if (mode == Mode.ASLEEP || mode == Mode.ASKING) voice.stop()
         animator.awake = mode != Mode.ASLEEP
         animator.localMood = when (mode) {
             Mode.ASLEEP -> null
@@ -151,7 +170,7 @@ class BlueyModel private constructor(private val context: Context) {
                 } else {
                     reply.put("text", hands.act(tool, args))
                     if (tool != "phone_bluey") {
-                        Thread.sleep(if (tool == "phone_open_app" || tool == "phone_open_url") 1200 else 350)
+                        hands.awaitUiStable(tool)
                         val look = hands.look(false)  // text only after an action: much quicker than a screenshot every step
                         reply.put("text", reply.optString("text") + "\nHere's the phone's screen now (ids have changed):\n" + look.optString("text"))
                     }
@@ -176,6 +195,7 @@ class BlueyModel private constructor(private val context: Context) {
         if (!link.connected) { showToast("Connect to your PC to ask him things."); return }
         if (!hasMicPermission()) { _needsMicPermission.value = true; return }
         holding = true
+        voice.stop()
         _caption.value = ""
         _heard.value = ""
         startMic()
@@ -193,6 +213,14 @@ class BlueyModel private constructor(private val context: Context) {
     fun type(text: String) { if (text.isNotBlank()) link.send("type", "text" to text.trim()) }
     fun sayHi() { if (link.connected) link.send("sayHi") }
     fun stopActions() { link.send("stop") }
+    fun refreshLearning() = learningRequest(JSONObject().put("t", "learning"))
+    fun setLearning(on: Boolean) = learningRequest(JSONObject().put("t", "learning").put("action", "toggle").put("enabled", on))
+    fun saveMemory(id: String?, kind: String, text: String) = learningRequest(JSONObject().put("t", "learning").put("action", "save")
+        .put("item", JSONObject().put("id", id).put("kind", kind).put("text", text)))
+    fun deleteMemory(id: String) = learningRequest(JSONObject().put("t", "learning").put("action", "delete").put("id", id))
+    private fun learningRequest(request: JSONObject) {
+        link.request(request) { reply -> if (reply != null) { learning.value = reply; if (reply.has("error")) showToast(reply.optString("error")) } }
+    }
 
     fun micPermissionAnswered() { _needsMicPermission.value = false }
 
@@ -253,11 +281,13 @@ class BlueyModel private constructor(private val context: Context) {
     fun setVolume(v: Float) {
         _volume.value = v
         chirp.volume = v
+        voice.volume = v
         prefs.edit().putFloat("volume", v).apply()
     }
 
     fun setShowReplies(on: Boolean) {
         _showReplies.value = on
+        BlueyHands.instance?.cursor?.caption(if (on) _caption.value else "")
         prefs.edit().putBoolean("showReplies", on).apply()
     }
 

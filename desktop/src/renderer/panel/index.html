@@ -29,6 +29,7 @@
       <button data-tab="chat" class="on">Talk</button>
       <button data-tab="sessions">Sessions</button>
       <button data-tab="phone">Phone</button>
+      <button data-tab="learning">Learning</button>
       <button data-tab="settings">Settings</button>
     </nav>
     <div class="brainline" id="brainline"></div>
@@ -67,6 +68,18 @@
         <button class="ghost danger" id="deleteSession">Delete</button>
       </header>
       <div class="entries" id="sEntries"></div>
+    </section>
+
+    <section id="tab-learning" class="tab">
+      <header><h2>Learning you</h2><span class="grow"></span><button class="pill" id="learningToggle">Learning is on</button></header>
+      <div class="cards">
+        <div class="card"><h3>Your shared guide</h3><p>Your workflows, corrections and Claude prompt style stay available across sessions on desktop and phone.</p>
+          <textarea id="learningDraft" rows="4" placeholder="Teach a preference or paste your prompt guide…"></textarea>
+          <button class="pill" id="learningSave">Save to my guide</button>
+          <p class="small">Teach him while you work. You can review, edit and forget each memory here. Learning saves context; it does not retrain the model or start tasks by itself.</p>
+        </div>
+        <div id="learningItems"></div>
+      </div>
     </section>
 
     <section id="tab-phone" class="tab">
