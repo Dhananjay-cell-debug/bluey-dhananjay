@@ -89,7 +89,8 @@ function renderStatus() {
   $('brainline').textContent = brainSummary();
   renderPhoneSetup();
   $('addr').textContent = (status.addresses || []).map((a) => `${a}:${status.port}`).join(' or ') || 'this PC\'s address';
-  $('connected').textContent = phones.length ? phones.join(', ') : 'None right now.';
+  const h = status.phoneHands;
+  $('connected').textContent = phones.length ? phones.join(', ') + (h ? (h.hands ? ' · Bluey can use this phone ✓' : h.lite ? ' · Lite app (no phone control)' : ' · phone control is off (turn it on in the app: grid → Let Bluey use this phone)') : '') : 'None right now.';
   applyState(status.state);
   renderBrains();
   renderBanner();

@@ -220,7 +220,7 @@ class PhoneServer extends EventEmitter {
       if (w) { this.asks.delete(m.prid); clearTimeout(w.timer); w.resolve(m); }
       return;
     }
-    if (m.t === 'caps') { info.hands = !!m.hands; this.emit('phones', this.list()); return; }
+    if (m.t === 'caps') { info.hands = !!m.hands; info.lite = !!m.lite; this.emit('caps', { name: info.name, hands: info.hands, lite: info.lite }); this.emit('phones', this.list()); return; }
     this.emit('command', m, info, (reply) => this.send(ws, { ...reply, rid: m.rid }));
   }
 

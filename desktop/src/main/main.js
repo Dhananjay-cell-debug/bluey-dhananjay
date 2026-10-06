@@ -108,6 +108,7 @@ function status() {
     whisper: whisper ? { state: whisper.state, detail: whisper.detail, model: whisper.model } : null,
     phones: phones ? phones.list() : [],
     usb: usb ? usb.devices : [],
+    phoneHands: (() => { const t = phones && phones.handsPhone(); return t ? { name: t.info.name, hands: !!t.info.hands, lite: !!t.info.lite } : null; })(),
     wirelessPhone: adbHands && adbHands.connected ? (adbHands.model || adbHands.serial) : null,
     usage: bluey && bluey.usage,
     addresses: phones ? phones.addresses() : [],
@@ -498,6 +499,7 @@ Only allow it if the numbers match. A paired phone can ask Bluey to use this PC.
     }).then(({ response }) => { top.destroy(); if (pairRequest === request) (response === 0 ? request.allow() : request.deny()); });
   });
   phones.on('phones', () => pushStatus());
+  phones.on('caps', (c) => log('phone caps:', c.name, 'can use phone =', c.hands, c.lite ? '(Lite app)' : '(Full app)'));
   phones.on('warning', (w) => { warnings.push(w); pushStatus(); });
   phones.on('audio', ({ data }) => bluey.pushAudio(data, 'phone'));
   phones.on('command', onPhoneCommand);
