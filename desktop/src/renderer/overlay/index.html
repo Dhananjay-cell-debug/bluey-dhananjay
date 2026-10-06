@@ -1,0 +1,22 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'">
+<link rel="stylesheet" href="../common/fonts.css">
+<style>
+  html, body { margin: 0; padding: 0; background: transparent; overflow: hidden; width: 100%; height: 100%; }
+  canvas { display: block; }
+  /* Preload the display font so the first bubble measures right. */
+  .preload { font-family: Fredoka; font-weight: 700; position: absolute; opacity: 0; pointer-events: none; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<span class="preload">Bluey</span>
+<script src="../common/palette.js"></script>
+<script src="../common/engine.js"></script>
+<script src="../common/chirp.js"></script>
+<script src="overlay.js"></script>
+</body>
+</html>

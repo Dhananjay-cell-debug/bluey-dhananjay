@@ -1,0 +1,17 @@
+# Reference and comparison copies (not ours to redistribute)
+ref/
+other/
+proto/
+qa/
+# Build outputs and downloaded tools
+node_modules/
+desktop/dist/
+desktop/vendor/
+android/.gradle/
+android/app/build/
+android/build/
+android/local.properties
+*.apk
+# Signing keys
+*.keystore
+*.jks

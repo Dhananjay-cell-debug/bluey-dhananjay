@@ -1,0 +1,166 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:">
+<title>Bluey</title>
+<link rel="stylesheet" href="../common/fonts.css">
+<link rel="stylesheet" href="panel.css">
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="who">
+      <canvas id="mini" width="108" height="96"></canvas>
+      <div>
+        <div class="name">Bluey</div>
+        <div class="link"><span class="dot" id="linkDot"></span><span id="linkText">Starting…</span></div>
+      </div>
+    </div>
+    <div class="face-wrap"><canvas id="face"></canvas><div class="mode" id="mode"></div></div>
+    <button class="primary" id="toggle">Start session</button>
+    <p class="hint" id="hint"></p>
+    <div class="keys">
+      <div><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>Space</kbd><span>tap to wake · hold to ask</span></div>
+      <div><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>K</kbd><span>type to him</span></div>
+      <div><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>S</kbd><span>stop him</span></div>
+    </div>
+    <nav>
+      <button data-tab="chat" class="on">Talk</button>
+      <button data-tab="sessions">Sessions</button>
+      <button data-tab="phone">Phone</button>
+      <button data-tab="settings">Settings</button>
+    </nav>
+    <div class="brainline" id="brainline"></div>
+  </aside>
+
+  <main>
+    <section id="tab-chat" class="tab on">
+      <header><h2>Talk to Bluey</h2><span class="sub" id="chatSub"></span></header>
+      <div class="banner" id="setupBanner" hidden></div>
+      <div class="entries" id="liveEntries"><div class="empty" id="liveEmpty">
+        <div class="big">Hold to ask, let go to hear back</div>
+        <p>Wake him with <b>Ctrl+Alt+Space</b> (or double tap his face on your phone). He listens while you work and keeps notes.
+        Hold the keys (or the phone screen) and ask anything: “what's this?”, “open Spotify”, “look up flights to Goa”.</p>
+      </div></div>
+      <div class="caption" id="caption" hidden></div>
+      <form class="composer" id="composer">
+        <input id="input" autocomplete="off" placeholder="Type to Bluey… (he can see your screen)">
+        <button class="send" title="Send">➤</button>
+      </form>
+    </section>
+
+    <section id="tab-sessions" class="tab">
+      <header><h2>Sessions</h2><span class="sub" id="sessionCount"></span><span class="grow"></span><button class="ghost" id="openNotes">Open notes folder</button></header>
+      <div class="sessions" id="sessions"></div>
+    </section>
+
+    <section id="tab-session" class="tab">
+      <header>
+        <button class="round" id="back">‹</button>
+        <div><h2 id="sTitle">Session</h2><div class="sub" id="sMeta"></div></div>
+        <span class="grow"></span>
+        <button class="pill" id="copyPrompt">Copy prompt for agent</button>
+        <button class="ghost" id="copyText">Copy transcript</button>
+        <button class="ghost" id="openFolder">Folder</button>
+        <button class="ghost danger" id="deleteSession">Delete</button>
+      </header>
+      <div class="entries" id="sEntries"></div>
+    </section>
+
+    <section id="tab-phone" class="tab">
+      <header><h2>Your phone</h2></header>
+      <div class="cards">
+        <div class="card">
+          <h3>Set up your Android phone</h3>
+          <ol>
+            <li><b>Install the app.</b> Easiest: plug the phone in with a USB cable (USB debugging on) and press the button. Or copy <code>Bluey.apk</code> to the phone and open it.</li>
+            <li><b>Connect.</b> Same Wi-Fi as this PC, open Bluey on the phone, it finds this PC by itself. No shared Wi-Fi? Keep the USB cable plugged in; that works too.</li>
+            <li><b>Pair once.</b> The phone and this PC show the same six digits. Click <b>Allow</b> here if they match.</li>
+          </ol>
+          <div class="qrbox"><div id="qr"></div><div><b>No cable needed:</b> point your phone's camera at this code (same Wi-Fi), tap the link, then <b>Download Bluey</b> and install it.<div class="small" id="qrUrl"></div></div></div>
+          <div id="usbBox" class="usb"></div>
+          <div id="pairBox"></div>
+          <p class="small">Phone can't find this PC? On the phone tap <b>Enter address</b> and type <span id="addr"></span>.</p>
+          <p class="small">Still nothing? Windows Firewall may be blocking it. <button class="link-btn" id="firewall">Allow Bluey on private networks</button></p>
+        </div>
+        <div class="card">
+          <h3>Paired phones</h3>
+          <div id="devices"></div>
+          <h3 class="mt">Connected now</h3>
+          <div id="connected" class="small"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-settings" class="tab">
+      <header><h2>Settings</h2></header>
+      <div class="settings">
+        <div class="group wide">
+          <div class="row-between"><h3>Health check</h3><button class="pill" id="runHealth">Run health check</button></div>
+          <p class="small">Checks everything only this PC can prove: brain sign-in on your plan, hearing, seeing the screen, the phone link, notes.</p>
+          <div id="health"></div>
+        </div>
+        <div class="group">
+          <h3>Brain (your subscription, no API keys)</h3>
+          <div class="brains" id="brains"></div>
+          <label class="row"><span>Use</span>
+            <select data-key="brain"><option value="auto">Automatic: Claude, else ChatGPT</option><option value="claude">Claude subscription (Claude Code)</option><option value="codex">ChatGPT subscription (Codex)</option></select></label>
+          <label class="row"><span>Quick choice</span>
+            <select data-key="speed"><option value="fast">Fastest</option><option value="balanced">Balanced</option><option value="smart">Smartest (slower)</option></select></label>
+          <p class="small">Or pick exactly (blank = the quick choice). Higher effort thinks longer: smarter, but slower and uses more of your plan.</p>
+          <label class="row"><span>Claude model</span><select data-key="claudeModel" id="claudeModel"></select></label>
+          <label class="row"><span>Claude effort</span><select data-key="claudeEffort" id="claudeEffort"></select></label>
+          <label class="row"><span>ChatGPT model</span><select data-key="codexModel" id="codexModel"></select></label>
+          <label class="row"><span>ChatGPT effort</span><select data-key="codexEffort" id="codexEffort"></select></label>
+        </div>
+        <div class="group">
+          <h3>His personality</h3>
+          <textarea data-key="personality" id="personality" rows="6"></textarea>
+          <div class="row-end"><button class="ghost" id="resetPersonality">Reset to default</button></div>
+          <label class="row"><span>Your name</span><input data-key="userName" placeholder="So he knows who you are"></label>
+        </div>
+        <div class="group">
+          <h3>Using the computer</h3>
+          <label class="check"><input type="checkbox" data-key="computerControl"> Let him click, type, scroll and open apps when you ask</label>
+          <p class="small">He only acts when you ask, confirms before anything hard to undo, never types passwords, and stops on <b>Ctrl+Alt+S</b>.</p>
+        </div>
+        <div class="group">
+          <h3>Listening</h3>
+          <label class="row"><span>Microphone</span>
+            <select data-key="micSource"><option value="auto">Automatic (phone if connected)</option><option value="phone">Phone</option><option value="pc">This PC</option></select></label>
+          <label class="row"><span>PC microphone</span><select data-key="pcMicDevice" id="mics"><option value="">Default</option></select></label>
+          <label class="row"><span>Speech recognition</span><select data-key="whisperModel" id="whisperModels"></select></label>
+          <label class="row"><span>Push-to-talk keys</span><input data-key="pttChord" placeholder="ctrl+alt+space"></label>
+          <label class="check"><input type="checkbox" data-key="keepAudio"> Keep the session audio in the notes folder</label>
+          <label class="check"><input type="checkbox" data-key="speakerLabels"> Speaker labels in the notes (Speaker A, B… worked out on this PC)</label>
+          <p class="small" id="whisperState"></p>
+        </div>
+        <div class="group">
+          <h3>His cursor</h3>
+          <label class="row"><span>Size</span><select data-key="cursorSize" data-type="number"><option value="48">Small</option><option value="72">Medium</option><option value="96">Large</option><option value="120">Huge</option></select></label>
+          <label class="row"><span>Trail</span><select data-key="trail"><option value="comet">Comet</option><option value="string">String to the phone</option><option value="none">None</option></select></label>
+          <label class="row"><span>Phone sits under</span><select data-key="phonePosition" data-type="number"><option value="0.2">Left</option><option value="0.5">Center</option><option value="0.8">Right</option></select></label>
+          <label class="row"><span>Mood</span><select data-key="mood"><option value="listening">Listening</option><option value="resting">Resting</option><option value="thinking">Thinking</option><option value="happy">Happy</option></select></label>
+          <label class="check"><input type="checkbox" data-key="followMouse"> Hide the cursor when idle (his eyes follow your mouse)</label>
+          <label class="check"><input type="checkbox" data-key="glow"> Glow</label>
+          <label class="check"><input type="checkbox" data-key="showCursor"> Show his cursor</label>
+          <label class="check"><input type="checkbox" data-key="captions"> Show his replies as speech bubbles</label>
+          <label class="row"><span>Chirp volume (PC)</span><input type="range" min="0" max="1" step="0.05" data-key="chirpVolume" data-type="number"></label>
+          <div class="row-end"><button class="ghost" id="talkTest">Talk test</button></div>
+        </div>
+        <div class="group">
+          <h3>Notes</h3>
+          <label class="row"><span>Notes folder</span><input data-key="notesFolder" placeholder="Documents\Bluey Notes"></label>
+          <label class="check"><input type="checkbox" data-key="launchAtLogin"> Start Bluey with Windows</label>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+<div class="toast" id="toast" hidden></div>
+<script src="../common/palette.js"></script>
+<script src="../common/face.js"></script>
+<script src="panel.js"></script>
+</body>
+</html>

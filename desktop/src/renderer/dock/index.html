@@ -1,0 +1,24 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'">
+<link rel="stylesheet" href="../common/fonts.css">
+<style>
+  html, body { margin: 0; background: transparent; overflow: hidden; width: 100%; height: 100%; user-select: none; }
+  canvas { display: block; width: 100%; height: 100%; border-radius: 22px 22px 0 0; cursor: pointer; }
+  .ring { position: absolute; inset: 0; border-radius: 22px 22px 0 0; pointer-events: none; transition: box-shadow .25s; }
+  .listening .ring, .asking .ring { box-shadow: inset 0 0 0 4px #4F8BFF; }
+  .asking .ring { box-shadow: inset 0 0 0 7px #4F8BFF; }
+  .thinking .ring { box-shadow: inset 0 0 0 4px #C79BFF; }
+  .speaking .ring { box-shadow: inset 0 0 0 4px #FF9AD0; }
+  .waking .ring { box-shadow: inset 0 0 0 4px #FFD66B; }
+</style>
+</head>
+<body>
+<canvas id="face"></canvas><div class="ring"></div>
+<script src="../common/palette.js"></script>
+<script src="../common/face.js"></script>
+<script src="dock.js"></script>
+</body>
+</html>

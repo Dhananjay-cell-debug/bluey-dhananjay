@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A tiny Bluey: the blueberry blob with two googly eyes. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <path android:pathData="M54,30 C70,30 82,40 82,56 C82,72 70,80 54,80 C38,80 26,72 26,56 C26,40 38,30 54,30 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="40" android:startY="30" android:endX="68" android:endY="80">
+                <item android:offset="0" android:color="#FFA9BCFF" />
+                <item android:offset="0.34" android:color="#FF6C86F5" />
+                <item android:offset="0.68" android:color="#FF4254D6" />
+                <item android:offset="1" android:color="#FF2B2F8F" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <path android:fillColor="#FF1C1F66" android:pathData="M54,25 L57,31 L64,29 L59,35 L62,40 L54,37 L46,40 L49,35 L44,29 L51,31 Z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M46,52 m-7,0 a7,7 0 1,0 14,0 a7,7 0 1,0 -14,0" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M62,52 m-7,0 a7,7 0 1,0 14,0 a7,7 0 1,0 -14,0" />
+    <path android:fillColor="#FF17151F" android:pathData="M47,54 m-3.4,0 a3.4,3.4 0 1,0 6.8,0 a3.4,3.4 0 1,0 -6.8,0" />
+    <path android:fillColor="#FF17151F" android:pathData="M63,54 m-3.4,0 a3.4,3.4 0 1,0 6.8,0 a3.4,3.4 0 1,0 -6.8,0" />
+    <path android:fillColor="#FF1C1F66" android:pathData="M54,66 m-3.5,0 a3.5,2.4 0 1,0 7,0 a3.5,2.4 0 1,0 -7,0" />
+</vector>
