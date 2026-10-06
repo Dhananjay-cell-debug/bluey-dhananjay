@@ -237,9 +237,9 @@ class AdbHands extends EventEmitter {
       if (name === 'phone_apps') return { text: await this.act(name, args) };
       const text = await this.act(name, args);
       if (name === 'phone_bluey') return { text };
-      await sleep(name === 'phone_open_app' || name === 'phone_open_url' ? 1600 : 700);
-      const look = await this.look(true);
-      return { text: text + "\nHere's the phone's screen now (ids have changed):\n" + look.text, image: look.image };
+      await sleep(name === 'phone_open_app' || name === 'phone_open_url' ? 1200 : 400);
+      const look = await this.look(false);  // text only: much quicker than a screenshot every step
+      return { text: text + "\nHere's the phone's screen now (ids have changed):\n" + look.text };
     } catch (e) {
       return { text: "That didn't work on the phone: " + e.message };
     }

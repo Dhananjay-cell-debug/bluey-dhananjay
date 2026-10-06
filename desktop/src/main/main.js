@@ -288,6 +288,7 @@ function wireIpc() {
   ipcMain.handle('panel:sessions', () => notes.list());
   ipcMain.handle('panel:session', (e, id) => { const s = notes.get(id); if (s) { const { folder, ...rest } = s; return { ...rest, folder }; } return null; });
   ipcMain.handle('panel:delete', (e, id) => notes.delete(id));
+  ipcMain.handle('panel:resume', async (e, id) => { await bluey.wake('pc', { resumeId: id }); return true; });
   ipcMain.handle('panel:copyPrompt', (e, id) => { clipboard.writeText(notes.agentPrompt(id)); return true; });
   ipcMain.handle('panel:copyText', (e, id) => { clipboard.writeText(notes.exportText(id)); return true; });
   ipcMain.handle('panel:openFolder', (e, id) => { const s = id && notes.get(id); shell.openPath(s ? s.folder : notesRoot()); return true; });
@@ -340,6 +341,7 @@ function onPhoneCommand(m, info, reply) {
     case 'askEnd': return bluey.endAsk();
     case 'type': return bluey.typed(m.text);
     case 'sayHi': return bluey.sayHi();
+    case 'resume': return bluey.wake(info, { resumeId: m.id });
     case 'sessions': return reply({ t: 'sessions', list: notes.list().slice(0, 200).map(({ folder, ...s }) => s) });
     case 'session': {
       const s = notes.get(m.id);
@@ -449,6 +451,7 @@ app.whenReady().then(async () => {
   settings.on('change', (k) => {
     if (k === 'userName') notes.userName = settings.get('userName');
     if (k === 'notesFolder') notes.root = notesRoot();
+    if (k === 'speechEngine' && whisper) { whisper.stop(); whisper.engine = settings.get('speechEngine') === 'whisper' ? 'whisper' : 'parakeet'; if (bluey && bluey.awake) whisper.start().catch(() => {}); }
     if (k === 'whisperModel' && whisper) { whisper.stop(); whisper.model = settings.get('whisperModel'); whisper.language = WHISPER_MODELS[whisper.model].language; if (bluey && bluey.awake) whisper.start().catch(() => {}); }
     if (k === 'pttChord') native.setHook(true, settings.get('pttChord'));
     if (k === 'followMouse' && host && host.queue.length === 0) overlay.goHome();
@@ -465,7 +468,11 @@ app.whenReady().then(async () => {
   native.on('ptt', onPtt);
   native.setHook(true, settings.get('pttChord'));
 
-  whisper = new Whisper({ binDir: PATHS.whisperBin, modelDir: path.join(REAL_USER_DATA, 'models'), model: settings.get('whisperModel') });
+  whisper = new Whisper({ binDir: PATHS.whisperBin, modelDir: path.join(REAL_USER_DATA, 'models'), model: settings.get('whisperModel'),
+    engine: settings.get('speechEngine') === 'whisper' ? 'whisper' : 'parakeet',
+    asrWorker: path.join(__dirname, 'asr-worker.js').replace('app.asar', 'app.asar.unpacked'),
+    sherpaPath: DEV ? path.join(ROOT, 'node_modules', 'sherpa-onnx-node') : path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'sherpa-onnx-node') });
+  whisper.on('fallback', (why) => { warnings.push('Using the smaller speech model: ' + why); pushStatus(); });
   whisper.on('state', pushStatus);
 
   overlay = new OverlayController(settings);
@@ -532,7 +539,8 @@ Only allow it if the numbers match. A paired phone can ask Bluey to use this PC.
   let lastPanelFace = 0;
   dock = new FaceDock(settings);
   const updateDock = () => {
-    if (settings.get('faceOnDesktop') && !phones.connected && !process.env.BLUEY_QA) dock.show(); else dock.hide();
+    // Only while he's awake (Ctrl+Alt+Space) and no phone is his face. Asleep, he stays out of the way.
+    if (settings.get('faceOnDesktop') && bluey.awake && !phones.connected && !process.env.BLUEY_QA) dock.show(); else dock.hide();
   };
   overlay.on('face', (face) => {
     phones.face(face);
@@ -544,7 +552,7 @@ Only allow it if the numbers match. A paired phone can ask Bluey to use this PC.
   const port = await startToolServer();
   bluey = new Bluey({ settings, notes, whisper, host, overlay, phones, brainStatus: () => brainStatus, bridge: bridgeCommand(port),
     workDir: path.join(app.getPath('userData'), 'brain') });
-  bluey.on('state', (st) => { pushStatus(); dock.setState(st); });
+  bluey.on('state', (st) => { pushStatus(); dock.setState(st); updateDock(); });
   const { AdbHands } = require('./adbhands');
   adbHands = new AdbHands({ adb: PATHS.adb, nativeImage });
   adbHands.on('change', pushStatus);
@@ -559,6 +567,15 @@ Only allow it if the numbers match. A paired phone can ask Bluey to use this PC.
   settings.on('change', (k) => { if (k === 'faceOnDesktop') updateDock(); if (k === 'phonePosition') dock.place(); });
   updateDock();
   ipcMain.on('dock:toggle', () => bluey.toggle('pc'));
+  ipcMain.on('dock:menu', () => {
+    Menu.buildFromTemplate([
+      { label: 'Put Bluey to sleep', click: () => bluey.sleep() },
+      { label: 'Hide his face', click: () => { settings.set('faceOnDesktop', false); dock.hide(); } },
+      { label: 'Open Bluey', click: () => showPanel() },
+      { type: 'separator' },
+      { label: 'Quit Bluey', click: () => app.quit() },
+    ]).popup();
+  });
   ipcMain.on('dock:askStart', () => bluey.beginAsk('pc'));
   ipcMain.on('dock:askEnd', () => bluey.endAsk());
   bluey.on('brain', pushStatus);

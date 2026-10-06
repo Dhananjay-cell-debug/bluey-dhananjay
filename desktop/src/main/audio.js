@@ -36,8 +36,8 @@ class ChunkWriter {
   constructor(folder, chunkSeconds = 300, onChunk) {
     this.onChunk = onChunk;
     this.folder = folder;
+    try { this.index = fs.readdirSync(folder).filter((f) => /^chunk-\d+\.wav$/.test(f)).length; } catch { this.index = 0; }
     this.chunkSamples = chunkSeconds * RATE;
-    this.index = 0;
     this.fd = null;
     this.samples = 0;
   }

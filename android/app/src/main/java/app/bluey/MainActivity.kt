@@ -38,9 +38,23 @@ class MainActivity : ComponentActivity() {
             BlueyRoot(model, requestMic = { askMic.launch(Manifest.permission.RECORD_AUDIO) })
         }
         if (!model.hasMicPermission()) askMic.launch(Manifest.permission.RECORD_AUDIO)
+        askForBackgroundRun()
         if (Build.VERSION.SDK_INT >= 33 &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
+    /** Asks Android once to let Bluey keep running (so Xiaomi and others don't kill his phone access). */
+    @android.annotation.SuppressLint("BatteryLife")
+    private fun askForBackgroundRun() {
+        val prefs = getSharedPreferences("bluey", MODE_PRIVATE)
+        val pm = getSystemService(POWER_SERVICE) as android.os.PowerManager
+        if (pm.isIgnoringBatteryOptimizations(packageName) || prefs.getInt("batteryAsked", 0) >= 2) return
+        prefs.edit().putInt("batteryAsked", prefs.getInt("batteryAsked", 0) + 1).apply()
+        runCatching {
+            startActivity(android.content.Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                android.net.Uri.parse("package:$packageName")))
         }
     }
 

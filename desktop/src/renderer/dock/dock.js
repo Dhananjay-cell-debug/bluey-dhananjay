@@ -19,7 +19,9 @@ window.bluey.on('dock:state', (s) => { document.body.className = s; animator.awa
 window.bluey.on('dock:talk', (seconds) => { talkUntil = performance.now() / 1000 + seconds; });
 let holdTimer = null, asking = false, lastUp = 0;
 const gaze = (e) => ({ x: Math.max(-1, Math.min(1, (e.clientX / innerWidth) * 2 - 1)), y: Math.max(-1, Math.min(1, (e.clientY / innerHeight) * 2 - 1)) });
+canvas.addEventListener('contextmenu', (e) => { e.preventDefault(); window.bluey.send('dock:menu'); });
 canvas.addEventListener('pointerdown', (e) => {
+  if (e.button !== 0) return;
   canvas.setPointerCapture(e.pointerId);
   animator.touchGaze = gaze(e);
   holdTimer = setTimeout(() => { asking = true; window.bluey.send('dock:askStart'); }, 300);

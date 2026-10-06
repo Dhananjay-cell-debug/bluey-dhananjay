@@ -244,6 +244,7 @@ async function showSession(id) {
 }
 
 $('back').onclick = () => { openSession = null; showTab('sessions'); };
+$('resumeSession').onclick = async () => { await api.invoke('panel:resume', openSession.id); showTab('chat'); };
 $('copyPrompt').onclick = async () => { await api.invoke('panel:copyPrompt', openSession.id); flashButton($('copyPrompt'), 'Copied ✓'); };
 $('copyText').onclick = async () => { await api.invoke('panel:copyText', openSession.id); flashButton($('copyText'), 'Copied ✓'); };
 $('openFolder').onclick = () => api.invoke('panel:openFolder', openSession.id);

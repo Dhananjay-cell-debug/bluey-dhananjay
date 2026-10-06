@@ -142,6 +142,20 @@ The user's mouse pointer is at @${mx},${my}`;
     return text;
   }
 
+  /** Text-only screen for after an action: no screenshot, so each step is much quicker. */
+  async lookQuick(prefix) {
+    try {
+      const raw = await this.native.call('snapshot', { maxEdge: 320, quality: 30 });
+      const shot = new Snapshot(raw, this.display());
+      this.snapshot = shot;
+      let text = this.describe(shot);
+      if (prefix) text = prefix + "\nHere's the screen now (ids have changed; call look_at_screen if you need the picture):\n" + text;
+      return { text };
+    } catch (e) {
+      return { text: (prefix ? prefix + ' ' : '') + "I can't see the screen right now (" + e.message + ').' };
+    }
+  }
+
   async look(prefix) {
     try {
       const raw = await this.native.call('snapshot', { maxEdge: 1280, quality: 70 });
@@ -208,9 +222,9 @@ The user's mouse pointer is at @${mx},${my}`;
           await sleep(90);  // the click lands at the bottom of the squish
           const p = this.physical(t.point);
           await this.native.call('click', { x: p.x, y: p.y, button: right ? 'right' : 'left', count, restore: true });
-          await sleep(420);
+          await sleep(260);
           const verb = right ? 'Right-clicked' : count === 2 ? 'Double-clicked' : 'Clicked';
-          return this.look(`${verb} ${t.name === 'that spot' ? 'there' : `"${t.name}"`}.`);
+          return this.lookQuick(`${verb} ${t.name === 'that spot' ? 'there' : `"${t.name}"`}.`);
         }
         case 'type_text': {
           const text = String(args.text || '');
@@ -236,8 +250,8 @@ The user's mouse pointer is at @${mx},${my}`;
             await sleep(120);
             await this.native.call('keys', { keys: 'enter' });
             this.overlay.send('overlay:bubble', { text: '↵' });
-            await sleep(600);
-            return this.look('Typed it and pressed Enter.');
+            await sleep(450);
+            return this.lookQuick('Typed it and pressed Enter.');
           }
           return { text: 'Typed it.' };
         }
@@ -248,8 +262,8 @@ The user's mouse pointer is at @${mx},${my}`;
           let r;
           try { r = await this.native.call('keys', { keys }); } catch (e) { return { text: e.message }; }
           this.overlay.send('overlay:bubble', { text: r.label || keys });
-          await sleep(420);
-          return this.look(`Pressed ${keys}.`);
+          await sleep(260);
+          return this.lookQuick(`Pressed ${keys}.`);
         }
         case 'scroll': {
           const direction = String(args.direction || 'down').toLowerCase();
@@ -263,8 +277,8 @@ The user's mouse pointer is at @${mx},${my}`;
           this.overlay.send('overlay:bubble', { text: arrow });
           const p = this.physical(point);
           await this.native.call('scroll', { x: p.x, y: p.y, dx, dy, restore: true });
-          await sleep(320);
-          return this.look(`Scrolled ${direction}.`);
+          await sleep(200);
+          return this.lookQuick(`Scrolled ${direction}.`);
         }
         case 'drag': {
           const from = this.spot(args, 'from_id', 'from_x', 'from_y');
@@ -295,8 +309,8 @@ The user's mouse pointer is at @${mx},${my}`;
           this.overlay.send('overlay:dragging', false);
           await sleep(60);
           if (saved) await this.native.call('warp', { x: saved.x, y: saved.y });
-          await sleep(300);
-          return this.look('Dragged it.');
+          await sleep(200);
+          return this.lookQuick('Dragged it.');
         }
         case 'open_app': {
           const name = String(args.name || '').trim();
@@ -304,8 +318,8 @@ The user's mouse pointer is at @${mx},${my}`;
           if (this.overlay.isHome) this.overlay.setMode({ kind: 'docked' });
           this.overlay.send('overlay:bubble', { text: 'Opening ' + name });
           const r = await this.native.call('openApp', { name }, 20000);
-          await sleep(1100);
-          return this.look(r.text);
+          await sleep(900);
+          return this.lookQuick(r.text);
         }
         case 'list_windows': {
           const [w, t] = await Promise.all([this.native.call('windows'), this.native.call('tabs', {}).catch(() => ({ tabs: [] }))]);
@@ -325,7 +339,7 @@ The user's mouse pointer is at @${mx},${my}`;
           this.overlay.send('overlay:bubble', { text: '⇆ ' + name });
           const r = await this.native.call('switchTo', { name, kind: args.kind || 'any' }, 20000);
           await sleep(500);
-          return this.look(r.text);
+          return this.lookQuick(r.text);
         }
         case 'open_url': {
           let url = String(args.url || '').trim();
@@ -338,7 +352,7 @@ The user's mouse pointer is at @${mx},${my}`;
           this.overlay.send('overlay:bubble', { text: parsed.hostname.replace(/^www\./, '') });
           await shell.openExternal(parsed.toString());
           await sleep(1500);
-          return this.look(`Opened ${parsed.hostname}.`);
+          return this.lookQuick(`Opened ${parsed.hostname}.`);
         }
         default:
           return { text: `Unknown action ${name}.` };

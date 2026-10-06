@@ -20,7 +20,7 @@ Everything between them is encrypted.
 
 1. **Laptop:** Bluey is already running (the blueberry by the clock). Open it → **Phone** tab.
 2. **Phone:** point your camera at the **QR code** on the laptop (or type the address shown there into Chrome) →
-   **Download Bluey** → open the file → **Install**. Allow "install unknown apps" if asked.
+   **Download Bluey** → open the file → **Install** (one app, `Bluey.apk`; it updates over the old one). Allow "install unknown apps" if asked.
 3. **Open Bluey on the phone.** Allow the microphone.
 4. **Pair:** the phone and laptop show the **same six numbers**. Click **Allow** on the laptop.
 5. **Let him use the phone (optional):** phone → Bluey → grid button (top right) → **Let Bluey use this phone** →

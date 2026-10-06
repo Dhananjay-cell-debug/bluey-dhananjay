@@ -60,6 +60,7 @@
         <button class="round" id="back">‹</button>
         <div><h2 id="sTitle">Session</h2><div class="sub" id="sMeta"></div></div>
         <span class="grow"></span>
+        <button class="pill" id="resumeSession">Continue this session</button>
         <button class="pill" id="copyPrompt">Copy prompt for agent</button>
         <button class="ghost" id="copyText">Copy transcript</button>
         <button class="ghost" id="openFolder">Folder</button>
@@ -142,8 +143,10 @@
           <label class="row"><span>Microphone</span>
             <select data-key="micSource"><option value="auto">Automatic (phone if connected)</option><option value="phone">Phone</option><option value="pc">This PC</option></select></label>
           <label class="row"><span>PC microphone</span><select data-key="pcMicDevice" id="mics"><option value="">Default</option></select></label>
-          <label class="row"><span>Speech recognition</span><select data-key="whisperModel" id="whisperModels"></select></label>
+          <label class="row"><span>Hearing</span><select data-key="speechEngine"><option value="parakeet">Most accurate (English)</option><option value="whisper">Smaller, more languages (Hindi, Hinglish…)</option></select></label>
+          <label class="row"><span>Smaller model</span><select data-key="whisperModel" id="whisperModels"></select></label>
           <label class="row"><span>Push-to-talk keys</span><input data-key="pttChord" placeholder="ctrl+alt+space"></label>
+          <label class="check"><input type="checkbox" data-key="autoContinue"> Carry on in the last session if I wake him within 10 minutes of it ending</label>
           <label class="check"><input type="checkbox" data-key="keepAudio"> Keep the session audio in the notes folder</label>
           <label class="check"><input type="checkbox" data-key="speakerLabels"> Speaker labels in the notes (Speaker A, B… worked out on this PC)</label>
           <p class="small" id="whisperState"></p>

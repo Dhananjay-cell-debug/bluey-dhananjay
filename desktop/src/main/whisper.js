@@ -12,6 +12,9 @@ const { spawn } = require('child_process');
 const { EventEmitter } = require('events');
 const { toWav } = require('./audio');
 
+const PARAKEET_URL = 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8.tar.bz2';
+const PARAKEET_DIR = 'sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8';
+
 const MODELS = {
   'base.en': { file: 'ggml-base.en.bin', size: 147964211, language: 'en', label: 'English — fast (recommended)' },
   'small.en': { file: 'ggml-small.en.bin', size: 487614201, language: 'en', label: 'English — more accurate, slower' },
@@ -53,8 +56,14 @@ function download(url, dest, onProgress, redirects = 0) {
 }
 
 class Whisper extends EventEmitter {
-  constructor({ binDir, modelDir, model = 'base.en', language }) {
+  constructor({ binDir, modelDir, model = 'base.en', language, engine = 'parakeet', asrWorker, sherpaPath }) {
     super();
+    this.engine = engine;          // parakeet (most accurate, English) | whisper (more languages, smaller)
+    this.asrWorker = asrWorker;
+    this.sherpaPath = sherpaPath;
+    this.asrProc = null;
+    this.asrWaiting = new Map();
+    this.asrNext = 1;
     this.binDir = binDir;
     this.modelDir = modelDir;
     this.model = MODELS[model] ? model : 'base.en';
@@ -82,7 +91,78 @@ class Whisper extends EventEmitter {
     });
   }
 
+  get asrDir() { return path.join(this.modelDir, 'asr', PARAKEET_DIR); }
+
+  /** Downloads and unpacks the Parakeet model the first time (about 490 MB). Windows 10+ ships `tar`, which reads .bz2. */
+  async ensureParakeet() {
+    if (fs.existsSync(path.join(this.asrDir, 'tokens.txt')) && fs.existsSync(path.join(this.asrDir, 'encoder.int8.onnx'))) return;
+    const folder = path.join(this.modelDir, 'asr');
+    fs.mkdirSync(folder, { recursive: true });
+    const archive = path.join(folder, 'parakeet.tar.bz2');
+    this.setState('downloading', 0);
+    let last = 0;
+    await download(PARAKEET_URL, archive, (got, total) => { const pct = total ? Math.floor(got / total * 100) : 0; if (pct !== last) { last = pct; this.setState('downloading', pct); } });
+    this.setState('starting');
+    await new Promise((resolve, reject) => require('child_process').execFile('tar', ['-xjf', archive, '-C', folder], { windowsHide: true, timeout: 10 * 60 * 1000 }, (e) => (e ? reject(e) : resolve())));
+    try { fs.unlinkSync(archive); } catch {}
+  }
+
+  async startParakeet() {
+    await this.ensureParakeet();
+    this.setState('starting');
+    const proc = spawn(process.execPath, [this.asrWorker, this.asrDir, this.sherpaPath, String(Math.max(2, Math.min(6, os.cpus().length - 2)))],
+      { env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+    this.asrProc = proc;
+    let log = '';
+    proc.stderr.on('data', (d) => { log = (log + d).slice(-2000); });
+    const ready = new Promise((resolve, reject) => {
+      let buf = '';
+      proc.stdout.on('data', (d) => {
+        buf += d;
+        let i;
+        while ((i = buf.indexOf('\n')) >= 0) {
+          const line = buf.slice(0, i); buf = buf.slice(i + 1);
+          let m; try { m = JSON.parse(line); } catch { continue; }
+          if (m.ready === true) resolve();
+          else if (m.ready === false) reject(new Error(m.error));
+          else if (m.id != null && this.asrWaiting.has(m.id)) { const w = this.asrWaiting.get(m.id); this.asrWaiting.delete(m.id); m.error ? w.reject(new Error(m.error)) : w.resolve(m.text); }
+        }
+      });
+      proc.on('exit', () => reject(new Error('speech recognition stopped ' + log.split('\n').filter(Boolean).slice(-1))));
+    });
+    proc.on('exit', (code) => {
+      this.asrProc = null;
+      for (const w of this.asrWaiting.values()) w.reject(new Error('speech recognition stopped'));
+      this.asrWaiting.clear();
+      if (this.state !== 'stopped') { this.setState('error', `Speech recognition stopped (code ${code}).`); }
+    });
+    await ready;
+    this.setState('ready');
+    this.transcribe(new Int16Array(16000)).catch(() => {});
+  }
+
+  postAsr(int16) {
+    return new Promise((resolve, reject) => {
+      if (!this.asrProc) return reject(new Error('speech recognition is not running'));
+      const id = this.asrNext++;
+      this.asrWaiting.set(id, { resolve: (t) => resolve(Whisper.clean(t)), reject });
+      this.asrProc.stdin.write(JSON.stringify({ id, pcm: Buffer.from(int16.buffer, int16.byteOffset, int16.byteLength).toString('base64') }) + '\n');
+    });
+  }
+
   async start() {
+    if (this.engine === 'parakeet') {
+      if (this.asrProc || this.starting) return this.starting;
+      this.starting = this.startParakeet().then(() => { this.starting = null; }, (e) => {
+        // If the better model can't start (no internet for the download, unsupported PC), use Whisper instead.
+        this.starting = null;
+        this.emit('fallback', e.message);
+        if (this.asrProc) { try { this.asrProc.kill(); } catch {} this.asrProc = null; }
+        this.engine = 'whisper';
+        return this.start();
+      });
+      return this.starting;
+    }
     if (this.proc || this.starting) return this.starting;
     this.starting = (async () => {
       if (!fs.existsSync(this.serverExe)) throw new Error('whisper-server.exe is missing from ' + this.binDir);
@@ -138,8 +218,8 @@ class Whisper extends EventEmitter {
     this.running = true;
     const job = this.queue.shift();
     try {
-      if (!this.proc) await this.start();
-      job.resolve(await this.post(job.int16, job.prompt));
+      if (this.engine === 'parakeet' ? !this.asrProc : !this.proc) await this.start();
+      job.resolve(this.engine === 'parakeet' ? await this.postAsr(job.int16) : await this.post(job.int16, job.prompt));
     } catch (e) {
       job.reject(e);
     } finally {
@@ -187,6 +267,7 @@ class Whisper extends EventEmitter {
 
   stop() {
     this.setState('stopped');
+    if (this.asrProc) { try { this.asrProc.kill(); } catch {} this.asrProc = null; }
     if (this.proc) { try { this.proc.kill(); } catch {} this.proc = null; }
     this.starting = null;
   }

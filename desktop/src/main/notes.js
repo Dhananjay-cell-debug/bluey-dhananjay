@@ -91,6 +91,24 @@ class NotesStore extends EventEmitter {
     return this.current;
   }
 
+  /** Reopens a finished session so new talk is added to it (same folder, notes and audio folder). */
+  resume(id) {
+    if (this.current) return this.current;
+    const s = this.get(id);
+    if (!s) return null;
+    this.ensureRoot();
+    this.current = { ...s, ended: null, resumed: (s.resumed || 0) + 1 };
+    this.save(true);
+    this.emit('changed', s.id);
+    return this.current;
+  }
+
+  /** The most recent finished session and how long ago it ended. */
+  lastFinished() {
+    const l = this.list().find((x) => !x.live && x.ended);
+    return l ? { ...l, agoMs: Date.now() - l.ended } : null;
+  }
+
   add(kind, text, { time, id } = {}) {
     if (!this.current) return null;
     text = String(text || '').trim();

@@ -26,6 +26,7 @@ const DEFAULTS = {
   phonePosition: 0.5,       // where the phone sits under the screen: 0 left … 1 right
   micSource: 'auto',        // auto (phone if connected, else this PC) | phone | pc
   pcMicDevice: '',
+  speechEngine: 'parakeet', // parakeet (most accurate for English, ~0.6 s) | whisper (smaller; also Hindi and 90 more languages)
   whisperModel: 'base.en',
   keepAudio: true,
   speakerLabels: true,      // Speaker A / B in the notes (worked out on this PC)
@@ -36,7 +37,8 @@ const DEFAULTS = {
   speakEngine: 'neural',    // neural (natural online voices, no key) | windows (this PC's own voices)
   speakNeuralVoice: 'en-US-AvaMultilingualNeural',
   speakVoice: '',           // Windows voice name (only for the windows engine / as the fallback)
-  faceOnDesktop: true,      // his face at the bottom of the screen when no phone is connected
+  faceOnDesktop: true,      // while he's awake with no phone connected, show his face at the bottom of the screen
+  autoContinue: true,       // waking within 10 minutes of the last session carries on in it
   autoLook: true,           // send a fresh look at the screen with every question (faster answers)
   notesFolder: '',          // empty = Documents/Bluey Notes
   devices: [],              // paired phones

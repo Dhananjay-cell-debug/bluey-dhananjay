@@ -476,11 +476,71 @@ async function run(ctx, scenarios, out) {
     let info = null, playing = false;
     for (let i = 0; i < 20 && !playing; i++) {
       await sleep(250);
-      info = await overlay.window.webContents.executeJavaScript('({ audio: !!window.__audio && !window.__audio.paused && !window.__audio.ended, secs: window.__audio ? window.__audio.duration : 0, win: speechSynthesis.speaking })');
+      // Really playing means it loaded (it has a length), has no error, and the clock is moving.
+      info = await overlay.window.webContents.executeJavaScript('({ audio: !!window.__audio && !window.__audio.error && window.__audio.readyState >= 3 && window.__audio.currentTime > 0.1, secs: window.__audio ? window.__audio.duration : 0, err: window.__audio && window.__audio.error ? window.__audio.error.message : null, win: speechSynthesis.speaking })');
       playing = info.audio || info.win;
     }
     bluey.clearCaption();
     record('speak', playing, { ...info, engine: how && how.engine, voice: how && how.voice, ms: how && how.ms });
+  }
+
+  if (scenarios.includes('emuhands')) {
+    // The real Full app on the Android emulator: pair, switch Accessibility on, and let the PC use the phone's hands.
+    const { execFileSync } = require('child_process');
+    const adb = ctx.PATHS.adb;
+    const serial = process.env.BLUEY_QA_ANDROID || 'emulator-5554';
+    const run = (...a) => { try { return execFileSync(adb, ['-s', serial, ...a], { encoding: 'utf8', timeout: 90000 }); } catch (e) { return String(e.stdout || '') + String(e.stderr || e.message); } };
+    const shot = (name) => { try { fs.writeFileSync(path.join(out, name), execFileSync(adb, ['-s', serial, 'exec-out', 'screencap', '-p'], { timeout: 30000, maxBuffer: 64 * 1024 * 1024 })); } catch {} return name; };
+    const { phones } = ctx;
+    const steps = {};
+    steps.reverse = run('reverse', 'tcp:47613', `tcp:${phones.port}`).trim() || 'ok';
+    steps.install = run('install', '-r', '-g', process.env.BLUEY_QA_APK || ctx.PATHS.apk).trim().split('\n').pop();
+    run('shell', 'pm', 'grant', 'app.bluey', 'android.permission.RECORD_AUDIO');
+    run('shell', 'settings', 'put', 'secure', 'enabled_accessibility_services', 'app.bluey/app.bluey.hands.BlueyHands');
+    run('shell', 'settings', 'put', 'secure', 'accessibility_enabled', '1');
+    run('shell', 'am', 'start', '-n', 'app.bluey/.MainActivity');
+    let request = null;
+    for (let i = 0; i < 60 && !request; i++) { await sleep(1000); request = phones.pendingRequest; }
+    steps.numbers = request && request.numbers;
+    shot('emu-1-pairing.png');
+    if (request) request.allow();
+    await sleep(5000);
+    shot('emu-2-face.png');
+    steps.paired = phones.list();
+    steps.handsOn = !!(phones.handsPhone() && phones.handsPhone().info.hands);
+    // Use the phone's hands exactly as the brain's tools do.
+    const t0 = Date.now();
+    const look = await phones.phoneTool('phone_look', {});
+    steps.lookMs = Date.now() - t0;
+    steps.lookSample = String(look.text || '').split('\n').slice(0, 4).join(' | ');
+    steps.lookHasImage = !!look.image;
+    await phones.phoneTool('phone_key', { key: 'home' });
+    await sleep(800);
+    const t1 = Date.now();
+    const opened = await phones.phoneTool('phone_open_app', { name: 'Settings' });
+    steps.openMs = Date.now() - t1;
+    steps.opened = String(opened.text || '').split('\n')[0];
+    steps.openHasImage = !!opened.image;  // after an action: text only, for speed
+    shot('emu-3-settings.png');
+    const m = /(N\d+) (?:button|text) @\d+,\d+ "(Network|Connected devices|Apps|Search settings|About)/i.exec(String(opened.text));
+    if (m) {
+      const t2 = Date.now();
+      const tapP = phones.phoneTool('phone_tap', { target_id: m[1] });
+      await sleep(250);
+      shot('emu-4-cursor-flying.png');  // the cursor should be on screen right now
+      const tapped = await tapP;
+      steps.tapMs = Date.now() - t2;
+      steps.tapped = String(tapped.text || '').split('\n')[0];
+      shot('emu-5-after-tap.png');
+    }
+    await phones.phoneTool('phone_scroll', { direction: 'down' });
+    shot('emu-6-scrolled.png');
+    await phones.phoneTool('phone_bluey', {});
+    await sleep(1200);
+    shot('emu-7-back-to-bluey.png');
+    const log = run('logcat', '-d', '-b', 'crash');
+    steps.crash = /FATAL EXCEPTION|AndroidRuntime/.test(log) ? log.slice(0, 1500) : null;
+    record('emuhands', !!steps.paired.length && steps.handsOn && !steps.crash && /Tapped|Opened/.test(steps.opened + (steps.tapped || '')), steps);
   }
 
   if (scenarios.includes('notes')) {

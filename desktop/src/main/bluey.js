@@ -58,7 +58,7 @@ class Bluey extends EventEmitter {
 
   toggle(from) { return this.awake ? this.sleep() : this.wake(from); }
 
-  async wake(from) {
+  async wake(from, opts = {}) {
     if (this.awake) return;
     this.lastError = null;
     this.setState('waking');
@@ -69,7 +69,13 @@ class Bluey extends EventEmitter {
     const phoneHere = this.phones.connected;
     this.micSource = pref === 'pc' || (pref === 'auto' && !phoneHere) || (pref === 'phone' && !phoneHere) ? 'pc' : 'phone';
     if (pref === 'phone' && !phoneHere) this.toast("Your phone isn't connected, so I'm using this PC's microphone.");
-    const session = this.notes.start({ source: this.micSource === 'phone' ? (from && from.name) || this.phones.list()[0] || 'phone' : 'this PC', brain: null });
+    // Carry on with an earlier session when asked, or automatically if the last one only just ended.
+    let session = null;
+    const last = this.notes.lastFinished();
+    const resumeId = opts.resumeId || (this.settings.get('autoContinue') && last && last.agoMs < 10 * 60 * 1000 && last.summary !== 'Nothing said yet' ? last.id : null);
+    if (resumeId) session = this.notes.resume(resumeId);
+    if (session) { this.needsContext = true; this.toast('Continuing your last session.'); }
+    else session = this.notes.start({ source: this.micSource === 'phone' ? (from && from.name) || this.phones.list()[0] || 'phone' : 'this PC', brain: null });
     this.audio = new AudioSession({ audioFolder: this.settings.get('keepAudio') ? this.notes.audioFolder : null });
     this.audio.on('utterance', (u) => this.onUtterance(u));
     this.audio.on('warning', (w) => this.emit('warning', w));

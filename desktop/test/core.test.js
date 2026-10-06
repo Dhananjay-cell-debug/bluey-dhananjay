@@ -260,12 +260,13 @@ test('the router answers chat fast and gives real tasks the smartest model', () 
   const tier = (q) => classify(q).tier;
   for (const q of ['hi', 'Hey Bluey', 'thanks!', 'good morning', 'how are you', 'I love you, baby.', 'bye']) assert.equal(tier(q), 'quick', q);
   for (const q of ["what's this?", 'what does this button do?', 'what time is it in Tokyo']) assert.equal(tier(q), 'standard', q);
-  for (const q of ['On my phone, open the Claude app and say hi to Claude.', 'open WhatsApp and message Mum that I am late', 'research the best laptop under 60000 and compare three',
-    'this is a difficult one, plan my week step by step', 'write a python script that renames my photos by date and explain it']) assert.equal(tier(q), 'deep', q);
+  for (const q of ['On my phone, open the Claude app and say hi to Claude.', 'open WhatsApp and message Mum that I am late']) assert.equal(tier(q), 'task', q);
+  for (const q of ['research the best laptop under 60000 and compare three', 'this is a difficult one, plan my week step by step', 'write a python script that renames my photos by date and explain it']) assert.equal(tier(q), 'deep', q);
   assert.equal(classify('think as hard as you can about this').max, true);
   // Claude: sonnet/low for chat, Opus medium normally, Opus high for tasks, max when asked.
   assert.deepEqual(plan('quick', 'claude'), { model: 'sonnet', effort: 'low' });
   assert.deepEqual(plan('standard', 'claude'), { model: 'opus', effort: 'medium' });
+  assert.deepEqual(plan('task', 'claude'), { model: 'opus', effort: 'medium' });
   assert.deepEqual(plan('deep', 'claude'), { model: 'opus', effort: 'high' });
   assert.deepEqual(plan('deep', 'claude', {}, [], true), { model: 'opus', effort: 'max' });
   assert.deepEqual(plan('deep', 'claude', { model: 'fable', effort: 'xhigh' }), { model: 'fable', effort: 'xhigh' });

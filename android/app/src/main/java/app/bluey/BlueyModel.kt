@@ -151,10 +151,9 @@ class BlueyModel private constructor(private val context: Context) {
                 } else {
                     reply.put("text", hands.act(tool, args))
                     if (tool != "phone_bluey") {
-                        Thread.sleep(if (tool == "phone_open_app" || tool == "phone_open_url") 1500 else 700)
-                        val look = hands.look(true)
+                        Thread.sleep(if (tool == "phone_open_app" || tool == "phone_open_url") 1200 else 350)
+                        val look = hands.look(false)  // text only after an action: much quicker than a screenshot every step
                         reply.put("text", reply.optString("text") + "\nHere's the phone's screen now (ids have changed):\n" + look.optString("text"))
-                        if (look.has("image")) reply.put("image", look.getString("image"))
                     }
                 }
             } catch (e: Exception) {

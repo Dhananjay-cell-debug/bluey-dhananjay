@@ -3,7 +3,8 @@
 //
 //   quick     greetings, thanks, short chat                → small/fast model, low effort
 //   standard  everyday questions about your screen        → your chosen model (Opus), medium effort
-//   deep      doing things, research, hard or long asks   → your chosen model, high effort (more if you ask for it)
+//   task      doing things on your phone or computer      → your chosen model, medium effort (many quick steps)
+//   deep      research, writing, hard or long asks        → your chosen model, high effort (more if you ask for it)
 'use strict';
 
 const QUICK_CHAT = /^(hi|hii+|hey+|hello|yo|hola|namaste|namaskar|sup|thanks?|thank you|thx|ok(ay)?|cool|nice|great|awesome|lol|haha|good (morning|night|evening|afternoon)|gm|gn|bye|goodbye|see you|how are you|how's it going|what'?s up|i love you|love you|you there|are you there|test(ing)?|can you hear me|hello bluey|hi bluey|hey bluey)\b/i;
@@ -20,10 +21,11 @@ function classify(question, { typed = false } = {}) {
   const q = String(question || '').trim();
   const n = words(q);
   if (MAX_WORDS.test(q)) return { tier: 'deep', max: true, why: 'you asked for maximum thinking' };
-  if (PHONE_OR_PC.test(q) && ACTION.test(q)) return { tier: 'deep', why: 'a task on your phone or computer' };
   if (HARD_WORDS.test(q)) return { tier: 'deep', why: 'sounds hard' };
   if (n > 28) return { tier: 'deep', why: 'a long request' };
-  if (ACTION.test(q) && n >= 5) return { tier: 'deep', why: 'a task to do' };
+  if (/\b(research|look up|find out|compare|analy[sz]e|write|draft|code|debug|build|plan|translate|summar[iy]s?e)\b/i.test(q) && n >= 5) return { tier: 'deep', why: 'research or writing' };
+  if (PHONE_OR_PC.test(q) && ACTION.test(q)) return { tier: 'task', why: 'a task on your phone or computer' };
+  if (ACTION.test(q) && n >= 5) return { tier: 'task', why: 'a task to do' };
   if (n <= 8 && QUICK_CHAT.test(q) && !SCREEN_Q.test(q.replace(/^(hi|hey|hello)\b/i, ''))) return { tier: 'quick', why: 'just chat' };
   if (n <= 3 && !SCREEN_Q.test(q) && !ACTION.test(q)) return { tier: 'quick', why: 'very short' };
   return { tier: 'standard', why: 'an everyday question' };
@@ -43,7 +45,7 @@ function plan(tier, brain, pick = {}, codexModels = [], max = false) {
     const smart = pick.model || 'opus';
     const base = pick.effort || 'medium';
     if (tier === 'quick') return { model: 'sonnet', effort: 'low' };
-    if (tier === 'standard') return { model: smart, effort: base };
+    if (tier === 'standard' || tier === 'task') return { model: smart, effort: base };
     return { model: smart, effort: max ? 'max' : atLeast(base, 'high') };
   }
   const list = codexModels || [];
@@ -53,7 +55,7 @@ function plan(tier, brain, pick = {}, codexModels = [], max = false) {
   const clamp = (m, e) => { let i = EFFORT_ORDER.indexOf(e); while (i > 0 && !supports(m, EFFORT_ORDER[i])) i--; return EFFORT_ORDER[Math.max(i, 0)]; };
   const base = pick.effort || 'medium';
   if (tier === 'quick') { const m = small || def; return { model: m && m.id, effort: clamp(m, 'low') }; }
-  if (tier === 'standard') return { model: def && def.id, effort: clamp(def, base) };
+  if (tier === 'standard' || tier === 'task') return { model: def && def.id, effort: clamp(def, base) };
   return { model: def && def.id, effort: clamp(def, max ? 'max' : atLeast(base, 'high')) };
 }
 

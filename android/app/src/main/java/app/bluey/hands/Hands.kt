@@ -33,9 +33,12 @@ import kotlin.math.min
  * (tap, type, scroll, back/home, open an app or link). He only acts when you ask, and never types into passwords.
  */
 class BlueyHands : AccessibilityService() {
+    /** His cursor on the phone's screen while he works. */
+    val cursor: PhoneCursor by lazy { PhoneCursor(this) }
+
     override fun onServiceConnected() { instance = this }
-    override fun onDestroy() { if (instance === this) instance = null; super.onDestroy() }
-    override fun onUnbind(intent: Intent?): Boolean { if (instance === this) instance = null; return super.onUnbind(intent) }
+    override fun onDestroy() { cursor.hideNow(); if (instance === this) instance = null; super.onDestroy() }
+    override fun onUnbind(intent: Intent?): Boolean { cursor.hideNow(); if (instance === this) instance = null; return super.onUnbind(intent) }
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
     override fun onInterrupt() {}
 
@@ -172,8 +175,10 @@ class BlueyHands : AccessibilityService() {
                 val id = args.optString("target_id", "").uppercase()
                 val t = targets[id]
                 val long = args.optBoolean("long", false)
-                if (t != null && !long && t.node.isClickable && t.node.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return "Tapped \"${t.label}\"."
                 val p = point(args) ?: return "Tell me what to tap: an N id from phone_look, or x and y."
+                cursor.fly(p.first, p.second)  // he flies there first, so you can see what he's about to touch
+                cursor.click(p.first, p.second, long)
+                if (t != null && !long && t.node.isClickable && t.node.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return "Tapped \"${t.label}\"."
                 return if (tapAt(p.first, p.second, long)) (if (long) "Long-pressed" else "Tapped") + (t?.let { " \"${it.label}\"." } ?: " there.") else "The tap didn't go through."
             }
             "phone_type" -> {
@@ -183,6 +188,7 @@ class BlueyHands : AccessibilityService() {
                     ?: return "Tap a text field first (or give its N id)."
                 if (node.isPassword) return "That's a password field. Ask the user to type it themselves."
                 node.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
+                runCatching { val r = Rect(); node.getBoundsInScreen(r); cursor.fly(r.left + min(60, r.width() / 5).toFloat(), r.bottom.toFloat() - 6f); cursor.typed(text) }
                 val existing = if (args.optBoolean("replace", true)) "" else (node.text?.toString() ?: "")
                 val ok = node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT,
                     Bundle().apply { putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, existing + text) })
@@ -204,6 +210,12 @@ class BlueyHands : AccessibilityService() {
                     "right" -> { path.moveTo(cx + dx, cy); path.lineTo(cx - dx, cy) }
                     else -> { path.moveTo(cx, cy + dy); path.lineTo(cx, cy - dy) }
                 }
+                when (dir) {
+                    "up" -> cursor.swipe(cx, cy - dy, cx, cy + dy)
+                    "left" -> cursor.swipe(cx - dx, cy, cx + dx, cy)
+                    "right" -> cursor.swipe(cx + dx, cy, cx - dx, cy)
+                    else -> cursor.swipe(cx, cy + dy, cx, cy - dy)
+                }
                 return if (gesture(path, 350)) "Scrolled $dir." else "Couldn't scroll."
             }
             "phone_key" -> {
@@ -215,14 +227,16 @@ class BlueyHands : AccessibilityService() {
                     "quick_settings" -> GLOBAL_ACTION_QUICK_SETTINGS
                     else -> return "Keys I can press: back, home, recents, notifications, quick_settings."
                 }
+                cursor.label(args.optString("key").replaceFirstChar { it.uppercase() })
                 return if (performGlobalAction(action)) "Pressed ${args.optString("key")}." else "That didn't work."
             }
-            "phone_open_app" -> return openApp(args.optString("name"))
+            "phone_open_app" -> { cursor.label("Opening " + args.optString("name")); return openApp(args.optString("name")) }
             "phone_open_url" -> {
                 var url = args.optString("url").trim()
                 if (url.isEmpty()) return "Which link?"
                 if (!Regex("^[a-zA-Z][a-zA-Z0-9+.-]*:").containsMatchIn(url)) url = "https://$url"
                 val uri = Uri.parse(url)
+                cursor.label(uri.host ?: "Opening link")
                 if (uri.scheme !in setOf("http", "https", "tel", "geo", "mailto", "whatsapp")) return "I only open web, phone, map, mail and WhatsApp links."
                 return runCatching { startActivity(Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); "Opened $url." }
                     .getOrDefault("Nothing on the phone can open that link.")

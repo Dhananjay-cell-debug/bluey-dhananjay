@@ -240,7 +240,7 @@ class PhoneServer extends EventEmitter {
     return new Promise((resolve) => {
       const timer = setTimeout(() => { this.asks.delete(prid); resolve({ text: 'The phone took too long to answer.' }); }, timeout);
       this.asks.set(prid, { resolve, timer });
-      this.send(target.ws, { t: 'phoneCmd', prid, tool, args: args || {}, image: true });
+      this.send(target.ws, { t: 'phoneCmd', prid, tool, args: args || {}, image: tool === 'phone_look' });
     });
   }
 
