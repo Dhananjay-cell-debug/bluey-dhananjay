@@ -165,8 +165,10 @@ private fun Sidebar(model: BlueyModel, onClose: () -> Unit, modifier: Modifier) 
             }
         }
         // Lets him use the phone for you (an Accessibility service you switch on once).
-        Text(if (app.bluey.hands.BlueyHands.enabled) "✓ Bluey can use this phone" else "Let Bluey use this phone", color = Palette.berry1,
-            fontFamily = Fonts.plexSans, fontSize = 13.sp, modifier = Modifier.clickable { app.bluey.hands.BlueyHands.openSettings(context) })
+        if (app.bluey.BuildConfig.HANDS) {
+            Text(if (app.bluey.hands.BlueyHands.enabled) "✓ Bluey can use this phone" else "Let Bluey use this phone", color = Palette.berry1,
+                fontFamily = Fonts.plexSans, fontSize = 13.sp, modifier = Modifier.clickable { app.bluey.hands.BlueyHands.openSettings(context) })
+        }
         // Xiaomi, Redmi, Huawei and some Samsungs stop background apps; this keeps him listening with the screen off.
         Text("Keep listening with the screen off", color = Palette.berry1, fontFamily = Fonts.plexSans, fontSize = 13.sp,
             modifier = Modifier.clickable { openBatterySettings(context) })

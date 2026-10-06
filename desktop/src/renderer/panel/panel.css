@@ -131,5 +131,9 @@ select option { background: #1E1B29; }
 .spk { font: 500 11px 'IBM Plex Mono', monospace; width: 78px; flex: none; padding-top: 3px; color: var(--soft); }
 .spk-A { color: #8FB3FF; } .spk-B { color: #5BE49B; } .spk-C { color: #FFB86B; } .spk-D { color: #FF9AD0; } .spk-E { color: #C79BFF; }
 .qrbox { display: flex; gap: 16px; align-items: center; background: #0d0c12; border-radius: 14px; padding: 12px; margin: 6px 0 12px; font-size: 13px; }
+.wifi { background: #0d0c12; border-radius: 14px; padding: 12px 14px; margin: 6px 0 12px; font-size: 13px; }
+.wifi summary { cursor: pointer; }
+.wifi input { display: block; width: 100%; margin: 6px 0; background: #000; border: 1px solid rgba(255,255,255,.1); border-radius: 10px; padding: 9px 11px; color: #fff; font: 13px 'IBM Plex Mono', monospace; }
+.wifi .row-btns { justify-content: flex-start; align-items: center; margin-top: 8px; }
 #qr { width: 132px; height: 132px; flex: none; background: #fff; border-radius: 10px; overflow: hidden; }
 #qr svg { width: 100%; height: 100%; display: block; }

@@ -48,6 +48,7 @@ const PATHS = {
 };
 
 let usb = null;
+let adbHands = null;
 let dock = null;
 let settings, notes, whisper, native, overlay, report, phones, host, bluey, tray, panel;
 let brainStatus = null;
@@ -107,6 +108,7 @@ function status() {
     whisper: whisper ? { state: whisper.state, detail: whisper.detail, model: whisper.model } : null,
     phones: phones ? phones.list() : [],
     usb: usb ? usb.devices : [],
+    wirelessPhone: adbHands && adbHands.connected ? (adbHands.model || adbHands.serial) : null,
     usage: bluey && bluey.usage,
     addresses: phones ? phones.addresses() : [],
     port: phones && phones.port,
@@ -292,6 +294,12 @@ function wireIpc() {
   ipcMain.handle('panel:type', (e, text) => bluey.typed(text));
   ipcMain.handle('panel:pairAnswer', (e, allow) => { if (pairRequest) (allow ? pairRequest.allow() : pairRequest.deny()); return true; });
   ipcMain.handle('panel:health', () => health());
+  ipcMain.handle('panel:adbPair', async (e, { pairAddress, code, connectAddress }) => {
+    if (pairAddress && code) { const r = await adbHands.pair(pairAddress, code); if (!r.ok) return r; }
+    if (connectAddress) return adbHands.connect(connectAddress);
+    return { ok: true, message: 'Paired. Now enter the "IP address & Port" shown at the top of the Wireless debugging screen and press Connect.' };
+  });
+  ipcMain.handle('panel:adbLook', async () => adbHands.connected || await adbHands.refresh() ? (await adbHands.look(false)).text : 'No phone connected.');
   ipcMain.handle('panel:qr', async () => {
     const ip = phones.addresses()[0];
     if (!ip) return null;
@@ -527,7 +535,16 @@ Only allow it if the numbers match. A paired phone can ask Bluey to use this PC.
   bluey = new Bluey({ settings, notes, whisper, host, overlay, phones, brainStatus: () => brainStatus, bridge: bridgeCommand(port),
     workDir: path.join(app.getPath('userData'), 'brain') });
   bluey.on('state', (st) => { pushStatus(); dock.setState(st); });
-  host.phoneBridge = (tool, args) => phones.phoneTool(tool, args);
+  const { AdbHands } = require('./adbhands');
+  adbHands = new AdbHands({ adb: PATHS.adb, nativeImage });
+  adbHands.on('change', pushStatus);
+  // The phone app's own hands if it has them; otherwise the phone's wireless debugging (no app permission needed).
+  host.phoneBridge = async (tool, args) => {
+    const target = phones.handsPhone();
+    if (target && target.info.hands) return phones.phoneTool(tool, args);
+    if (await adbHands.refresh()) return adbHands.tool(tool, args);
+    return phones.phoneTool(tool, args);
+  };
   phones.on('phones', updateDock);
   settings.on('change', (k) => { if (k === 'faceOnDesktop') updateDock(); if (k === 'phonePosition') dock.place(); });
   updateDock();

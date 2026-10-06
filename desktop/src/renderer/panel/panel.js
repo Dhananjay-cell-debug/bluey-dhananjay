@@ -273,7 +273,15 @@ function renderDevices() {
     b.onclick = async () => { settings = await api.invoke('panel:forget', b.dataset.forget); renderDevices(); };
   });
 }
+$('adbGo').onclick = async () => {
+  $('adbMsg').textContent = 'Working…';
+  const r = await api.invoke('panel:adbPair', { pairAddress: $('adbPairAddr').value, code: $('adbCode').value, connectAddress: $('adbConnectAddr').value });
+  $('adbMsg').textContent = r.message;
+  if (r.ok) $('adbCode').value = '';
+};
+
 function renderPhoneSetup() {
+  if (status.wirelessPhone) $('adbMsg').textContent = '✓ Connected: ' + status.wirelessPhone;
   const usb = status.usb || [];
   const ready = usb.find((d) => d.state === 'device');
   const unauthorized = usb.find((d) => d.state === 'unauthorized');

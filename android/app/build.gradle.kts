@@ -39,7 +39,14 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
-    buildFeatures { compose = true }
+    buildFeatures { compose = true; buildConfig = true }
+
+    // "lite" has no Accessibility service (so Google Play Protect lets it install); "full" can also use the phone for you.
+    flavorDimensions += "mode"
+    productFlavors {
+        create("lite") { dimension = "mode"; buildConfigField("boolean", "HANDS", "false") }
+        create("full") { dimension = "mode"; buildConfigField("boolean", "HANDS", "true") }
+    }
     testOptions { unitTests.isReturnDefaultValues = true }
 }
 

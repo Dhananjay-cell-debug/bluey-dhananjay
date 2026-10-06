@@ -343,10 +343,15 @@ async function run(ctx, scenarios, out) {
     const fg1 = await ctx.native.call('foreground');
     if (!bluey.awake) { await bluey.wake('pc'); await sleep(800); }
     const turnP = waitTurn(bluey);
+    // Sample the front window while he works (your own apps, like a WhatsApp message, may grab focus afterwards).
+    const seen = new Set();
+    let watching = true;
+    (async () => { while (watching) { try { seen.add((await ctx.native.call('foreground')).title); } catch {} await sleep(200); } })();
     bluey.ask('Switch to my Bluey QA Beta window please.', true);
     const turn = await turnP;
     await sleep(600);
-    const fg2 = await ctx.native.call('foreground');
+    watching = false;
+    const fg2 = { title: [...seen].find((t) => /QA Beta/.test(t || '')) || [...seen].pop() };
     const tabs = await ctx.native.call('windows');
     alpha.destroy(); beta.destroy();
     record('tabs', /Alpha/.test(fg1.title) && /Beta/.test(fg2.title),

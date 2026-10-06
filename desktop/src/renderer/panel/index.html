@@ -80,6 +80,17 @@
           </ol>
           <div class="qrbox"><div id="qr"></div><div><b>No cable needed:</b> point your phone's camera at this code (same Wi-Fi), tap the link, then <b>Download Bluey</b> and install it.<div class="small" id="qrUrl"></div></div></div>
           <div id="usbBox" class="usb"></div>
+          <details class="wifi" id="wifiBox"><summary><b>Let Bluey use my phone with no app permission</b> (wireless debugging)</summary>
+            <ol class="small">
+              <li>Phone: Settings → About phone → tap <b>MIUI version</b> 7 times. Then Settings → Additional settings → <b>Developer options</b> → turn on <b>USB debugging</b> and <b>Wireless debugging</b>. (On Xiaomi/Redmi also turn on <b>USB debugging (Security settings)</b>.)</li>
+              <li>Tap <b>Wireless debugging</b> → <b>Pair device with pairing code</b>. Type the IP:port and 6-digit code here.</li>
+              <li>Go back one screen, type the main <b>IP address &amp; Port</b> here and press Connect.</li>
+            </ol>
+            <input id="adbPairAddr" placeholder="Pairing IP:port (e.g. 192.168.0.105:41234)">
+            <input id="adbCode" placeholder="6-digit pairing code" maxlength="6">
+            <input id="adbConnectAddr" placeholder="Main IP:port (e.g. 192.168.0.105:37155)">
+            <div class="row-btns"><button class="pill" id="adbGo">Pair &amp; connect</button><span class="small" id="adbMsg"></span></div>
+          </details>
           <div id="pairBox"></div>
           <p class="small">Phone can't find this PC? On the phone tap <b>Enter address</b> and type <span id="addr"></span>.</p>
           <p class="small">Still nothing? Windows Firewall may be blocking it. <button class="link-btn" id="firewall">Allow Bluey on private networks</button></p>

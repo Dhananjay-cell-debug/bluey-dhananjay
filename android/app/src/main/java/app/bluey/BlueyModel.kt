@@ -69,7 +69,7 @@ class BlueyModel private constructor(private val context: Context) {
         link.onMessage = { handle(it) }
         link.onConnected = {
             link.send("status")
-            link.send("caps", "hands" to BlueyHands.enabled)
+            link.send("caps", "hands" to BlueyHands.enabled, "lite" to !app.bluey.BuildConfig.HANDS)
             refreshSessions()
         }
         link.onDisconnected = {
@@ -138,7 +138,9 @@ class BlueyModel private constructor(private val context: Context) {
             val hands = BlueyHands.instance
             val reply = JSONObject().put("t", "phoneResult").put("prid", rid)
             if (hands == null) {
-                reply.put("text", "Bluey isn't allowed to use the phone yet. On the phone: Bluey → grid button → \"Let Bluey use this phone\", then turn on Bluey in Accessibility.")
+                reply.put("text", if (app.bluey.BuildConfig.HANDS)
+                    "Bluey isn't allowed to use the phone yet. On the phone: Bluey → grid button → \"Let Bluey use this phone\", then turn on Bluey in Accessibility."
+                else "This is the Lite phone app, which can't control the phone. Install the Full phone app to let Bluey use the phone.")
             } else try {
                 if (tool == "phone_look") {
                     val look = hands.look(m.optBoolean("image", true))

@@ -231,3 +231,24 @@ test('tool list switches with computer control and every tool has a schema', () 
   }
   assert.ok(tools.actionNames.has('click') && !tools.actionNames.has('point_at'));
 });
+
+// ───────────── Phone screen reading (wireless debugging) ─────────────
+
+test('a phone screen dump becomes N ids with kinds, grid positions and password protection', () => {
+  const { parseDump } = require('../src/main/adbhands');
+  const xml = `<?xml version='1.0' encoding='UTF-8'?><hierarchy rotation="0">
+    <node text="WhatsApp" class="android.widget.TextView" package="com.whatsapp" clickable="false" bounds="[40,100][400,180]" />
+    <node text="Mum &amp; Dad" class="android.widget.TextView" package="com.whatsapp" clickable="true" bounds="[0,300][1080,420]" />
+    <node text="" content-desc="Send" class="android.widget.ImageButton" package="com.whatsapp" clickable="true" bounds="[900,2200][1040,2340]" />
+    <node text="" class="android.widget.EditText" package="com.whatsapp" hint="Message" bounds="[100,2200][880,2340]" />
+    <node text="hunter2" class="android.widget.EditText" password="true" package="x" bounds="[100,900][880,1000]" />
+    <node text="tiny" class="android.widget.TextView" bounds="[0,0][1,1]" />
+    <node text="" class="android.view.View" bounds="[0,0][1080,2400]" /></hierarchy>`;
+  const n = parseDump(xml);
+  assert.deepEqual(n.map((x) => x.kind), ['text', 'button', 'button', 'text field', 'text field']);
+  assert.equal(n[1].label, 'Mum & Dad');
+  assert.equal(n[2].label, 'Send');
+  assert.equal(n[3].label, 'Message');
+  assert.equal(n[4].label, 'password field');
+  assert.ok(n[4].password && !JSON.stringify(n).includes('hunter2'), 'passwords never reach the brain');
+});
